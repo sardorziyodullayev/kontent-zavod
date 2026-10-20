@@ -93,7 +93,7 @@ async function syncYoutube() {
   const pl = state.platforms.find((p) => p.id === 'youtube');
   await api('/api/action', { type: 'platform.update', payload: { id: 'youtube', patch: { followers: ch.subscribers, ...(pl?.connected ? {} : { connected: true }), ...(pl?.handle ? {} : { handle: ch.handle }) } } });
   const posts = state.videos.flatMap((v) => v.posts).filter((p) => p.platform === 'youtube' && p.status === 'published' && p.url && videoIdOf(p.url));
-  if (!posts.length) return;
+  if (!posts.length) return console.log(`YouTube: ${ch.title}, ${ch.subscribers} obunachi`);
   const stats = await videoStats(posts.map((p) => videoIdOf(p.url!)!));
   for (const p of posts) {
     const s = stats.get(videoIdOf(p.url!)!);
