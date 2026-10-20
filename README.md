@@ -1,46 +1,79 @@
 # Kontent Zavod — admin panel
 
-Videolarni ijtimoiy tarmoqlarga joylab boradigan kontent zavodining boshqaruv paneli.
-G'oyadan joylashgacha bo'lgan butun liniya, joylash navbati, natijalar, prognoz va tavsiyalar bitta joyda.
+Videolarni ijtimoiy tarmoqlarga joylab boradigan kontent zavodining boshqaruv paneli: g'oyadan joylashgacha bo'lgan butun liniya, joylash navbati, natijalar, prognoz va tavsiyalar.
 
-**Jonli demo:** GitHub Pages'da (repo sahifasidagi *Environments → github-pages* havolasi). Demo ma'lumotlar brauzeringizda saqlanadi.
+**Jonli demo:** https://sardorziyodullayev.github.io/kontent-zavod/ — demo ma'lumotlar brauzeringizda saqlanadi.
 
-## Nimalar bor
+## Texnologiyalar
+
+| Qatlam | Nima ishlatilgan |
+|---|---|
+| Interfeys | **React 19**, **TypeScript 7**, **Vite 8** |
+| Dizayn | **Tailwind CSS 4**, shadcn/ui uslubidagi komponentlar (**Radix UI** dialog), **lucide-react** ikonlar |
+| Ma'lumot va marshrutlar | **TanStack Query 5** (server holati, kesh, avtomatik yangilanish), **TanStack Router** (sahifalar, URL'dagi filtrlar) |
+| Grafiklar | **Recharts 3** + qo'lda yozilgan SVG (sparkline, issiqlik xaritasi) |
+| Kanban | **dnd-kit** (sudrab o'tkazish) |
+| Buyruqlar palitrasi | **cmdk** (<kbd>Ctrl K</kbd>) |
+| Server | **Hono 4** (Node.js) |
+| Baza | **SQLite** (libSQL) + **Drizzle ORM**, migratsiyalar `drizzle/` papkasida |
+| Testlar | **Vitest** |
+
+Prognoz, tahlil va ogohlantirishlar mantig'i `src/core/` da yozilgan va umumiy: uni brauzer, server va worker bir xil ishlatadi.
+
+## Bo'limlar
 
 | Bo'lim | Nima ko'rsatadi |
 |---|---|
-| **Boshqaruv** | Keyingi video va sanoq (soat:daqiqa:soniya), tayyorlik konveyeri (8 bosqich), har platforma uchun prognoz: ko'rishlar va yangi obunachilar oralig'i, ishonch darajasi. Ogohlantirishlar, KPI (ko'rishlar, obunachilar, joylashlar, ER), kunlik ko'rishlar grafigi, platformalar ulushi, yaqin 7 kun, oxirgi joylanganlar, oylik maqsadlar, faoliyat jurnali |
-| **Videolar** | Har bir video: qaysi platformaga, qaysi kuni, soat nechida joylangan, ko'rishlar, ER, tomosha foizi, yangi obunachilar. Qidiruv, filtrlar, saralash, CSV eksport. Video kartasida o'sish grafigi, platformalar kesimi, rejalashtirish, ssenariy, izohlar |
-| **Reja va kalendar** | Oylik kalendar: tayyor / tayyor emas / joylangan / xato. Haftalik maqsad, har platforma uchun eng yaxshi vaqtlar |
-| **Ssenariylar** | Kanban: G'oya → Ssenariy → Suratga olish → Montaj → Tayyor → Rejalashtirilgan → Joylandi (sudrab o'tkaziladi). Ssenariy muharriri: hook, asosiy qism, CTA, so'z soni, taxminiy davomiylik, 4 ta shablon |
+| **Boshqaruv** | Keyingi video va soniyalab sanoq. Tayyorlik konveyeri (8 bosqich, bosib belgilanadi). Har platforma uchun ko'rishlar va obunachilar prognozi, ishonch darajasi bilan. Ogohlantirishlar, KPI, kunlik ko'rishlar grafigi, platformalar ulushi, yaqin 7 kun, oxirgi joylanganlar, oylik maqsadlar, faoliyat jurnali |
+| **Videolar** | Qaysi platformaga, qaysi kuni, soat nechida joylangan; ko'rishlar, ER, tomosha foizi, yangi obunachilar. Qidiruv, filtrlar va saralash URL'da saqlanadi (havolani ulashsa bo'ladi), CSV eksport |
+| **Reja va kalendar** | Oylik kalendar (tayyor / tayyor emas / joylangan / xato), haftalik maqsad, platformalar bo'yicha eng yaxshi soatlar |
+| **Ssenariylar** | Kanban: G'oya → Ssenariy → Suratga olish → Montaj → Tayyor → Rejalashtirilgan → Joylandi. Ssenariy muharriri: hook, CTA, so'z soni, taxminiy davomiylik, 4 ta shablon |
 | **Tahlil** | Avtomatik tavsiyalar, kun×soat issiqlik xaritasi, mavzular reytingi, obunachiga aylanish, qisqa va uzun video taqqoslash, obunachilar o'sishi, eng yaxshi 10 post |
 | **Platformalar** | YouTube, Instagram, TikTok, Telegram, Facebook: obunachilar, 30 kunlik o'sish, token holati, ulash/uzish |
 | **Konveyer va API** | Ishlab chiqarish liniyasi, joylash navbati (tayyorlik, prognoz), worker uchun API |
-| **Sozlamalar** | Maqsadlar, JSON/CSV eksport-import, demo ma'lumotlarni tiklash, mavzu (qorong'i/yorug') |
+| **Sozlamalar** | Maqsadlar, JSON/CSV eksport-import, demo ma'lumotlarni tiklash, qorong'i/yorug' mavzu |
 
-Siz aytmagan, lekin kerak bo'ladigan narsalar ham qo'shildi:
+Qo'shimcha ravishda panel quyidagilarni kuzatadi:
 
-- **Tayyor emaslik xavfi.** Joylashga 72 soatdan kam vaqt qolgan va to'liq tayyor bo'lmagan video ogohlantirish beradi, nima yetishmasligini ham yozadi.
-- **Token muddati.** Platforma tokeni tugashidan 7 kun oldin ogohlantiradi, chunki token tugasa avtomatik joylash to'xtaydi.
-- **Bo'sh kunlar.** Keyingi 7 kunda hech narsa rejalashtirilmagan kunlarni ko'rsatadi.
-- **Xato va qayta urinish.** Platforma xato qaytarsa post "Xato" bo'ladi, bitta tugma bilan qayta urinish mumkin.
-- **Trend signali.** Post odatdagidan 2.5 baravar tez o'sayotgan bo'lsa xabar beradi, davomini tezroq tayyorlash uchun.
+- **Tayyor emaslik.** Joylashga 72 soatdan kam qolgan va to'liq tayyor bo'lmagan videoni ko'rsatadi, nima yetishmasligini ham yozadi.
+- **Token muddati.** Platforma tokeni tugashidan 7 kun oldin eslatadi.
+- **Bo'sh kunlar.** Keyingi 7 kundagi rejasiz kunlarni ko'rsatadi.
+- **Xato va qayta urinish.** Joylash xato bersa bitta tugma bilan qayta urinish mumkin.
+- **Trend signali.** Post odatdagidan 2.5 baravar tez o'sayotgan bo'lsa xabar beradi.
 - **Maqsad sur'ati.** Hozirgi tezlikda oy oxirida qancha bo'lishini hisoblaydi.
-- Buyruqlar palitrasi (<kbd>Ctrl K</kbd>), <kbd>N</kbd> bilan yangi video, mobil ko'rinish, qorong'i va yorug' mavzu.
 
 ## Ishga tushirish
 
-Faqat Node.js 20+ kerak, bog'liqliklar yo'q.
+Node.js 20.19+ kerak.
 
 ```bash
+npm install
+npm run dev
+```
+
+- Panel: http://localhost:5173 (Vite, o'zgarishlar darhol ko'rinadi)
+- API: http://localhost:4310/api
+
+Production rejimi (bitta port):
+
+```bash
+npm run build
 npm start
 ```
 
-Brauzerda: http://localhost:4310
-
-Ma'lumotlar `data/db.json` faylida saqlanadi. Birinchi ishga tushirishda 90 kunlik namunaviy ma'lumot yaratiladi. Sozlamalar → *Demo ma'lumotlarni tiklash* bilan qayta boshlash mumkin.
+Shunda panel ham, API ham http://localhost:4310 da ishlaydi. Ma'lumotlar `data/zavod.db` (SQLite) faylida saqlanadi. Birinchi ishga tushirishda 90 kunlik namunaviy ma'lumot yaratiladi. Sozlamalar → *Demo ma'lumotlarni tiklash* bilan qayta boshlash mumkin.
 
 Serverni internetga chiqarsangiz `ADMIN_TOKEN` o'rnating (`.env.example` dan `.env` nusxa oling). Shunda barcha yozish amallari token so'raydi.
+
+| Buyruq | Vazifasi |
+|---|---|
+| `npm run dev` | Vite + API (o'zgarishda qayta yuklanadi) |
+| `npm run build` | Tip tekshiruvi + production build (`dist/`) |
+| `npm start` | API + tayyor panel |
+| `npm test` | Vitest testlari |
+| `npm run typecheck` | TypeScript tekshiruvi |
+| `npm run worker` | Joylash workeri |
+| `npm run db:generate` | Sxema o'zgarganda yangi Drizzle migratsiyasi |
 
 ## Prognoz qanday hisoblanadi
 
@@ -55,16 +88,10 @@ Ishonch darajasi: 20+ o'xshash post bo'lsa *yuqori*, 8+ bo'lsa *o'rta*, undan ka
 
 ## Avtomatlashtirish (worker va API)
 
-Panelda ikki xil rejim bor:
-
 1. **Simulyatsiya** (standart). Server vaqti kelgan tayyor postlarni o'zi "joylangan" deb belgilaydi va statistikani modeldan hisoblaydi. Panelni sinab ko'rish uchun.
-2. **Worker rejimi.** *Konveyer va API* sahifasida simulyatsiyani o'chiring va workerni ishga tushiring:
+2. **Worker rejimi.** *Konveyer va API* sahifasida simulyatsiyani o'chiring va `npm run worker` ni ishga tushiring.
 
-```bash
-npm run worker
-```
-
-Worker har daqiqada `/api/queue` ni o'qiydi, vaqti kelgan postni platformaga yuklaydi va natijani panelga yuboradi. Video fayllar `media/<videoId>.mp4` dan olinadi. Telegram adapteri tayyor (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL`). YouTube, Instagram, TikTok va Facebook adapterlarining skeleti [tools/worker.mjs](tools/worker.mjs) ichida: kalitlar `.env` ga yoziladi, yuklash chaqiruvi shu funksiyalarga yoziladi.
+Worker har daqiqada `/api/queue` ni o'qiydi, vaqti kelgan postni platformaga yuklaydi va natijani panelga yuboradi. Video fayllar `media/<videoId>.mp4` dan olinadi. Telegram adapteri tayyor (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL`). YouTube, Instagram, TikTok va Facebook adapterlarining skeleti [tools/worker.ts](tools/worker.ts) ichida.
 
 | Metod | Yo'l | Vazifasi |
 |---|---|---|
@@ -73,24 +100,23 @@ Worker har daqiqada `/api/queue` ni o'qiydi, vaqti kelgan postni platformaga yuk
 | POST | `/api/posts/:id/published` | `{url, publishedAt}`: joylandi |
 | POST | `/api/posts/:id/failed` | `{error}`: xato, panelda ogohlantirish chiqadi |
 | POST | `/api/posts/:id/stats` | `{stats:{views,likes,comments,shares,saves,subs,retention}}` |
-| POST | `/api/videos` | `{title, topic, format}`: yangi video, masalan `render.mjs` dan |
+| POST | `/api/videos` | `{title, topic, format}`: yangi video |
+| POST | `/api/action` | Panelning barcha amallari (`{type, payload}`) |
 | GET | `/api/export.csv` | Barcha postlar CSV |
-| GET | `/api/state` | To'liq holat (panel uchun) |
+| GET | `/api/state` | To'liq holat |
 
 ## Tuzilishi
 
 ```
-server.mjs            HTTP server, JSON baza, API (bog'liqliksiz)
-public/js/core.js     ma'lumot modeli, amallar, analitika, prognoz (server va brauzer uchun umumiy)
-public/js/app.js      interfeys
-public/js/charts.js   SVG grafiklar
-public/css/app.css    dizayn
-tools/worker.mjs      joylash workeri
-tests/                node --test
+src/
+  core/          ma'lumot modeli, amallar, analitika, prognoz (brauzer + server + worker)
+  components/    qobiq, video kartasi, dialoglar, grafiklar, ui/ (Button, Card, Dialog…)
+  pages/         8 ta sahifa
+  lib/           TanStack Query ma'lumot qatlami, UI holati
+server/          Hono API, Drizzle sxemasi, SQLite
+drizzle/         SQL migratsiyalar
+tools/worker.ts  joylash workeri
+tests/           Vitest
 ```
 
-GitHub Pages'da `public/` papkasi statik demo sifatida chiqadi: API bo'lmagani uchun panel o'zi demo rejimga o'tadi.
-
-```bash
-npm test
-```
+GitHub Pages'da `dist/` statik demo sifatida chiqadi: API bo'lmagani uchun panel o'zi demo rejimga o'tadi.

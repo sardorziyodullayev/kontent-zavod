@@ -1,40 +1,40 @@
-// Kontent Zavod worker: navbatdan vaqti kelgan, tayyor postlarni olib platformaga joylaydi
-// va natijani panelga xabar qiladi. Ishga tushirish: npm run worker  (bir marta: npm run worker -- --once)
-//
-// Muhim: haqiqiy joylash uchun panelda "Simulyatsiya" o'chirilgan bo'lsin
-// (Konveyer va API sahifasi), aks holda server postlarni o'zi "joylangan" deb belgilaydi.
+// Kontent Zavod worker: navbatdan vaqti kelgan, tayyor postlarni platformaga joylaydi va panelga xabar beradi.
+// Ishga tushirish: npm run worker   (bir marta: npm run worker -- --once)
+// Haqiqiy joylash uchun panelda "Simulyatsiya" o'chirilgan bo'lsin (Konveyer va API sahifasi).
 import fs from 'node:fs';
 import path from 'node:path';
+import type { PlatformId, QueueItem } from '../src/core/types';
 
-const API = process.env.PANEL_URL || 'http://localhost:4310';
-const TOKEN = process.env.ADMIN_TOKEN || '';
-const MEDIA_DIR = process.env.MEDIA_DIR || './media'; // <videoId>.mp4 fayllari
-const INTERVAL = Number(process.env.WORKER_INTERVAL || 60) * 1000;
+const API = process.env.PANEL_URL ?? 'http://localhost:4310';
+const TOKEN = process.env.ADMIN_TOKEN ?? '';
+const MEDIA_DIR = process.env.MEDIA_DIR ?? './media'; // <videoId>.mp4 fayllari
+const INTERVAL = Number(process.env.WORKER_INTERVAL ?? 60) * 1000;
 const ONCE = process.argv.includes('--once');
 
 const headers = { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}) };
-const api = async (p, body) => {
+async function api<T>(p: string, body?: unknown): Promise<T> {
   const r = await fetch(API + p, body ? { method: 'POST', headers, body: JSON.stringify(body) } : { headers });
   if (!r.ok) throw new Error(`${p}: ${r.status} ${await r.text()}`);
-  return r.json();
-};
+  return r.json() as Promise<T>;
+}
 
-// ---- platforma adapterlari ----
-// Har biri { url } qaytaradi yoki xato tashlaydi. Kalit yo'q bo'lsa — aniq xabar.
-const need = (...keys) => {
+/** Kerakli .env kalitlari yo'q bo'lsa aniq xabar beradi. */
+function need(...keys: string[]) {
   const miss = keys.filter((k) => !process.env[k]);
   if (miss.length) throw new Error(`Sozlanmagan: ${miss.join(', ')} (.env)`);
-};
+}
 
-const adapters = {
+type Adapter = (job: QueueItem, file?: string) => Promise<{ url: string }>;
+
+const adapters: Record<PlatformId, Adapter> = {
   async telegram(job, file) {
     need('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHANNEL');
     const base = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
     const text = `${job.title}\n\n${job.caption}`;
-    let res;
+    let res: { ok: boolean; description?: string; result: { message_id: number } };
     if (file) {
       const form = new FormData();
-      form.append('chat_id', process.env.TELEGRAM_CHANNEL);
+      form.append('chat_id', process.env.TELEGRAM_CHANNEL!);
       form.append('caption', text.slice(0, 1024));
       form.append('video', new Blob([fs.readFileSync(file)]), path.basename(file));
       res = await (await fetch(`${base}/sendVideo`, { method: 'POST', body: form })).json();
@@ -42,8 +42,7 @@ const adapters = {
       res = await (await fetch(`${base}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHANNEL, text }) })).json();
     }
     if (!res.ok) throw new Error(`Telegram: ${res.description}`);
-    const ch = String(process.env.TELEGRAM_CHANNEL).replace('@', '');
-    return { url: `https://t.me/${ch}/${res.result.message_id}` };
+    return { url: `https://t.me/${process.env.TELEGRAM_CHANNEL!.replace('@', '')}/${res.result.message_id}` };
   },
   async youtube() {
     need('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN');
@@ -64,9 +63,9 @@ const adapters = {
 };
 
 async function runOnce() {
-  const queue = await api('/api/queue');
+  const queue = await api<QueueItem[]>('/api/queue');
   const due = queue.filter((j) => j.dueIn <= 0);
-  if (!due.length) { console.log(new Date().toISOString(), `navbatda ${queue.length} ta, vaqti kelgani yo‘q`); return; }
+  if (!due.length) return console.log(new Date().toISOString(), `navbatda ${queue.length} ta, vaqti kelgani yo‘q`);
   for (const job of due) {
     if (!job.ready) {
       await api(`/api/posts/${job.postId}/failed`, { error: `Video tayyor emas (${Math.round(job.readiness * 100)}%)` });
@@ -78,12 +77,12 @@ async function runOnce() {
       await api(`/api/posts/${job.postId}/published`, { url, publishedAt: Date.now() });
       console.log('✓', job.platform, job.title, url);
     } catch (e) {
-      await api(`/api/posts/${job.postId}/failed`, { error: e.message });
-      console.error('✗', job.platform, job.title, e.message);
+      await api(`/api/posts/${job.postId}/failed`, { error: (e as Error).message });
+      console.error('✗', job.platform, job.title, (e as Error).message);
     }
   }
 }
 
 console.log(`Worker: ${API} (har ${INTERVAL / 1000} s)`);
-await runOnce().catch((e) => console.error(e.message));
-if (!ONCE) setInterval(() => runOnce().catch((e) => console.error(e.message)), INTERVAL);
+await runOnce().catch((e: Error) => console.error(e.message));
+if (!ONCE) setInterval(() => runOnce().catch((e: Error) => console.error(e.message)), INTERVAL);

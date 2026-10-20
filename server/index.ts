@@ -1,0 +1,97 @@
+// Kontent Zavod API serveri: Hono + SQLite. Productionda Vite build (dist/) ni ham beradi.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { Hono } from 'hono';
+import { bearerAuth } from 'hono/bearer-auth';
+import { HTTPException } from 'hono/http-exception';
+import { logger } from 'hono/logger';
+import { ActionError, applyAction, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
+import { initDb, loadState, saveState } from './db';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DIST = path.join(ROOT, 'dist');
+const argPort = process.argv.indexOf('--port');
+const PORT = Number(argPort > 0 ? process.argv[argPort + 1] : process.env.PORT) || 4310;
+const TOKEN = process.env.ADMIN_TOKEN ?? '';
+
+await initDb();
+let state: State = (await loadState()) ?? seed(Date.now());
+await saveState(state);
+
+// Amallar ketma-ket bajariladi: bir vaqtda kelgan ikki so'rov holatni buzmasin.
+let chain: Promise<unknown> = Promise.resolve();
+function serial<T>(fn: () => T | Promise<T>): Promise<T> {
+  const run = chain.then(fn);
+  chain = run.catch(() => undefined);
+  return run;
+}
+const act = (action: Action) =>
+  serial(async () => {
+    const now = Date.now();
+    tick(state, now);
+    const result = applyAction(state, action, now);
+    await saveState(state);
+    return result;
+  });
+
+setInterval(() => void serial(async () => { tick(state, Date.now()); await saveState(state); }), 60_000).unref();
+
+const ACTIONS = new Set<Action['type']>(['video.create', 'video.update', 'video.move', 'video.check', 'video.delete', 'post.schedule', 'post.reschedule', 'post.remove', 'post.retry', 'post.publishNow', 'post.published', 'post.failed', 'post.stats', 'platform.update', 'goals.update', 'workspace.update']);
+
+const api = new Hono()
+  .use('*', async (c, next) => {
+    if (!TOKEN || c.req.method === 'GET') return next();
+    return bearerAuth({ token: TOKEN, invalidTokenMessage: { error: 'Token noto‘g‘ri' }, noAuthenticationHeaderMessage: { error: 'Token kerak (Authorization: Bearer …)' } })(c, next);
+  })
+  // --- panel uchun ---
+  .get('/state', (c) => { tick(state, Date.now()); return c.json({ mode: 'server' as const, now: Date.now(), state }); })
+  .post('/action', async (c) => {
+    const body = await c.req.json<{ type?: string; payload?: unknown }>();
+    if (!body.type || !ACTIONS.has(body.type as Action['type'])) throw new HTTPException(400, { message: 'Noma’lum amal' });
+    const result = await act({ type: body.type, payload: body.payload ?? {} } as Action);
+    return c.json({ ok: true, result, now: Date.now(), state });
+  })
+  .post('/reset', async (c) => { await serial(async () => { state = seed(Date.now()); await saveState(state); }); return c.json({ ok: true, state }); })
+  .post('/import', async (c) => {
+    const b = await c.req.json<State>();
+    if (!Array.isArray(b?.videos) || !Array.isArray(b?.platforms)) throw new HTTPException(400, { message: 'Fayl noto‘g‘ri' });
+    await serial(async () => { state = tick(b, Date.now()); await saveState(state); });
+    return c.json({ ok: true });
+  })
+  .get('/export.csv', (c) => c.body('﻿' + toCSV(state, Date.now()), 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="kontent-zavod.csv"' }))
+  // --- avtomatlashtirish (worker, n8n, render skriptlari) uchun ---
+  .get('/queue', (c) => c.json(nextQueue(state, Date.now())))
+  .get('/queue/next', (c) => c.json(nextQueue(state, Date.now()).find((x) => x.ready) ?? null))
+  .post('/posts/:id/published', async (c) => c.json({ ok: true, result: await act({ type: 'post.published', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
+  .post('/posts/:id/failed', async (c) => c.json({ ok: true, result: await act({ type: 'post.failed', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
+  .post('/posts/:id/stats', async (c) => c.json({ ok: true, result: await act({ type: 'post.stats', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
+  .post('/videos', async (c) => c.json(await act({ type: 'video.create', payload: await c.req.json() }), 201))
+  .get('/health', (c) => c.json({ ok: true, videos: state.videos.length, updatedAt: state.updatedAt }));
+
+const app = new Hono();
+app.use('/api/*', logger());
+app.route('/api', api);
+app.onError((err, c) => {
+  if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+  if (err instanceof ActionError || err instanceof SyntaxError) return c.json({ error: err.message }, 400);
+  console.error(err);
+  return c.json({ error: 'Server xatosi' }, 500);
+});
+app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: 'Topilmadi' }, 404) : c.text('Topilmadi', 404)));
+
+if (fs.existsSync(DIST)) {
+  app.use('/*', serveStatic({ root: path.relative(process.cwd(), DIST) || '.' }));
+  app.get('*', (c) => c.html(fs.readFileSync(path.join(DIST, 'index.html'), 'utf8')));
+}
+
+serve({ fetch: app.fetch, port: PORT }, () => {
+  console.log(`Kontent Zavod API: http://localhost:${PORT}/api`);
+  if (fs.existsSync(DIST)) console.log(`Panel: http://localhost:${PORT}`);
+  else console.log('Panel uchun: npm run dev (Vite, http://localhost:5173) yoki npm run build');
+  if (!TOKEN) console.log('Diqqat: ADMIN_TOKEN o‘rnatilmagan — faqat mahalliy foydalanish uchun.');
+});
+
+export type ApiType = typeof api;

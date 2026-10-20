@@ -1,0 +1,180 @@
+@import 'tailwindcss';
+
+/* Kontent Zavod — Display: Unbounded · UI: Geist · bitta aksent: ohak (lime) */
+:root {
+  color-scheme: dark;
+  --page: #0e0e0c;
+  --surface: #161614;
+  --surface-2: #1d1d1a;
+  --surface-3: #262622;
+  --line: #2a2a27;
+  --line-2: #383835;
+  --text: #f0efec;
+  --text-2: #c3c2b7;
+  --muted: #898781;
+  --accent: #d4ff3a;
+  --accent-ink: #141a00;
+  --accent-text: #d4ff3a;
+  --accent-wash: rgba(212, 255, 58, 0.1);
+  --good: #0ca30c;
+  --good-text: #3fcf3f;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --critical-text: #ff7a7a;
+  /* platformalar: tasdiqlangan kategorik palitra (qorong'i yuza uchun) */
+  --s-youtube: #3987e5;
+  --s-instagram: #d95926;
+  --s-tiktok: #199e70;
+  --s-telegram: #c98500;
+  --s-facebook: #d55181;
+  /* ketma-ket (issiqlik xaritasi) */
+  --seq-0: #1d2633;
+  --seq-1: #184f95;
+  --seq-2: #1c5cab;
+  --seq-3: #256abf;
+  --seq-4: #3987e5;
+  --seq-5: #6da7ec;
+  --seq-6: #9ec5f4;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --page: #f2f1ec;
+  --surface: #fcfcfb;
+  --surface-2: #f4f3ef;
+  --surface-3: #e9e8e2;
+  --line: #e1e0d9;
+  --line-2: #c3c2b7;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #7a7973;
+  --accent-text: #4a6600;
+  --accent-wash: rgba(140, 190, 0, 0.14);
+  --good-text: #006300;
+  --critical-text: #b42323;
+  --s-youtube: #2a78d6;
+  --s-instagram: #eb6834;
+  --s-tiktok: #1baf7a;
+  --s-telegram: #eda100;
+  --s-facebook: #e87ba4;
+  --seq-0: #eef3fa;
+  --seq-1: #cde2fb;
+  --seq-2: #9ec5f4;
+  --seq-3: #6da7ec;
+  --seq-4: #3987e5;
+  --seq-5: #256abf;
+  --seq-6: #184f95;
+  --shadow: 0 12px 40px rgba(30, 30, 20, 0.14);
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--text);
+  --color-ink-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-text: var(--accent-text);
+  --color-accent-wash: var(--accent-wash);
+  --color-good: var(--good);
+  --color-good-text: var(--good-text);
+  --color-warning: var(--warning);
+  --color-serious: var(--serious);
+  --color-critical: var(--critical);
+  --color-critical-text: var(--critical-text);
+  --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Unbounded', 'Geist', system-ui, sans-serif;
+  --shadow-pop: var(--shadow);
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--page);
+    color: var(--text);
+  }
+  body {
+    @apply font-sans text-sm antialiased;
+    overflow-x: hidden;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .card {
+    @apply min-w-0 rounded-2xl border border-line bg-surface px-5 py-[18px];
+  }
+  .card-title {
+    @apply font-display text-[13.5px] font-semibold tracking-tight;
+  }
+  .input {
+    @apply h-[38px] w-full rounded-[10px] border border-line-2 bg-surface-2 px-3 outline-none focus:border-ink-2;
+  }
+  textarea.input {
+    @apply h-auto min-h-21 resize-y py-2.5 leading-normal;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  .table {
+    @apply w-full border-collapse;
+  }
+  .table th {
+    @apply border-b border-line px-2.5 py-2 text-left text-xs font-medium whitespace-nowrap text-muted;
+  }
+  .table td {
+    @apply border-b border-line px-2.5 py-[11px] align-middle;
+    font-variant-numeric: tabular-nums;
+  }
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .table .r {
+    @apply text-right;
+  }
+  .table tr.click {
+    @apply cursor-pointer;
+  }
+  .table tr.click:hover td {
+    @apply bg-surface-2;
+  }
+  .thumb {
+    --th-l: 26%;
+    background: linear-gradient(160deg, hsl(var(--h) 22% calc(var(--th-l) + 8%)), hsl(var(--h) 18% var(--th-l)));
+  }
+  :root[data-theme='light'] .thumb {
+    --th-l: 70%;
+  }
+}
+
+/* Recharts: o'qlar va panjara yuzaga mos */
+.recharts-cartesian-axis-tick-value {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.recharts-cartesian-grid line {
+  stroke: var(--line);
+}
+.recharts-surface:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
