@@ -18,7 +18,7 @@ export const pshort = (id: PlatformId) => PLATFORMS.find((p) => p.id === id)?.sh
 export const STAGES: { id: Stage; name: string }[] = [
   { id: 'idea', name: 'G‘oya' },
   { id: 'script', name: 'Ssenariy' },
-  { id: 'production', name: 'Suratga olish' },
+  { id: 'production', name: 'Ovoz va vizual' },
   { id: 'editing', name: 'Montaj' },
   { id: 'ready', name: 'Tayyor' },
   { id: 'scheduled', name: 'Rejalashtirilgan' },
@@ -29,7 +29,7 @@ export const stageName = (id: Stage) => STAGES.find((s) => s.id === id)?.name ??
 export const CHECKLIST: { id: ChecklistKey; name: string }[] = [
   { id: 'script', name: 'Ssenariy yozildi' },
   { id: 'voice', name: 'Ovoz yozildi' },
-  { id: 'footage', name: 'Suratga olindi / render' },
+  { id: 'footage', name: 'Vizual / render' },
   { id: 'edit', name: 'Montaj tugadi' },
   { id: 'thumbnail', name: 'Muqova (thumbnail)' },
   { id: 'subtitles', name: 'Subtitr' },

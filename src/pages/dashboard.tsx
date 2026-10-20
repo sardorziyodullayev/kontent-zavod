@@ -6,6 +6,7 @@ import {
   followersAt, forecastPost, kpis, local, localDow, localHour, nextQueue, pname, postStats, readiness, relDay, rowTotal, slotLabel, slotOf, type State,
 } from '@/core';
 import { AlertsCard } from '@/components/alerts';
+import { FactoryNow } from '@/components/factory-now';
 import { BarRow, Delta, PChips, Pf, Sparkline, StatTile, pcolor } from '@/components/bits';
 import { MultiLine } from '@/components/line-chart';
 import { useAppState } from '@/components/shell';
@@ -155,7 +156,9 @@ export function ViewsChart({ state, now }: { state: State; now: number }) {
   return (
     <Card>
       <CardHead title="Kunlik ko‘rishlar" sub="platformalar bo‘yicha, Toshkent vaqti" />
-      <MultiLine labels={c.labels} tipLabels={c.tips} series={c.series} height={270} total aria="Kunlik ko‘rishlar" />
+      {c.series.some((x) => x.values.some((n) => n > 0))
+        ? <MultiLine labels={c.labels} tipLabels={c.tips} series={c.series} height={270} total aria="Kunlik ko‘rishlar" />
+        : <EmptyState title="Statistika shu yerda chiqadi" text="Birinchi videolar joylangach, ko‘rishlar har 30 daqiqada platformalardan avtomatik olinadi." />}
     </Card>
   );
 }
@@ -171,9 +174,9 @@ function PlatformShare({ state, now }: { state: State; now: number }) {
   const max = Math.max(...rows.map((r) => r.views), 1);
   return (
     <Card>
-      <CardHead title="Platformalar" sub={`${period} kunlik ko‘rishlar`} />
-      <div className="grid gap-3">{[...rows].sort((a, b) => b.views - a.views).map((r) => <BarRow key={r.id} label={<Pf id={r.id} />} value={r.views} max={max} display={fmtNum(r.views)} color={pcolor(r.id)} title={`${r.name}: ${fmtFull(r.views)} ko‘rish`} />)}</div>
-      <div className="-mx-5 mt-4 overflow-x-auto px-5">
+      <CardHead title="Platformalar" sub={max > 1 ? `${period} kunlik ko‘rishlar` : 'obunachilar'} />
+      {max > 1 && <div className="grid gap-3">{[...rows].sort((a, b) => b.views - a.views).map((r) => <BarRow key={r.id} label={<Pf id={r.id} />} value={r.views} max={max} display={fmtNum(r.views)} color={pcolor(r.id)} title={`${r.name}: ${fmtFull(r.views)} ko‘rish`} />)}</div>}
+      <div className={cn('-mx-5 overflow-x-auto px-5', max > 1 && 'mt-4')}>
         <table className="table">
           <thead><tr><th>Obunachilar</th><th className="r">Jami</th><th className="r">+{period} kun</th></tr></thead>
           <tbody>{rows.map((r) => <tr key={r.id}><td><Pf id={r.id} /></td><td className="r">{fmtFull(r.f)}</td><td className="r text-good-text">+{fmtNum(r.g)}</td></tr>)}</tbody>
@@ -223,6 +226,7 @@ function Recent({ state, now }: { state: State; now: number }) {
         <table className="table">
           <thead><tr><th>Qachon</th><th>Platforma</th><th>Video</th><th className="r">Ko‘rish</th><th className="r">+Obun.</th></tr></thead>
           <tbody>
+            {!list.length && <tr><td colSpan={5}><EmptyState title="Hali joylangan video yo‘q" text="Rejadagi videolar vaqti kelganda shu ro‘yxatga tushadi." /></td></tr>}
             {list.map(({ v, p }) => { const s = postStats(p, now); return (
               <tr key={p.id} className="click" onClick={() => openVideo(v.id)}>
                 <td className="whitespace-nowrap">{relDay(p.publishedAt!, now)}, {fmtTime(p.publishedAt!)}</td><td><PChips ids={[p.platform]} /></td>
@@ -233,6 +237,16 @@ function Recent({ state, now }: { state: State; now: number }) {
         </table>
       </div>
     </Card>
+  );
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="grid place-items-center gap-2 px-4 py-10 text-center">
+      <span className="grid grid-cols-3 gap-[3px]" aria-hidden="true">{[1, 0, 1, 0, 1, 0, 1, 0, 1].map((on, i) => <i key={i} className={cn('size-[7px] rounded-[2px]', on ? 'bg-accent' : 'bg-surface-3')} />)}</span>
+      <div className="mt-1 font-semibold">{title}</div>
+      <p className="max-w-[44ch] text-[13px] text-muted">{text}</p>
+    </div>
   );
 }
 
@@ -278,11 +292,13 @@ export function Activity({ state, now, n = 8 }: { state: State; now: number; n?:
 }
 
 export function DashboardPage() {
-  const { state } = useAppState();
+  const data = useAppState();
+  const { state } = data;
   const now = useNow(60_000);
   return (
     <>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
+      <FactoryNow data={data} />
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
         <NextVideo state={state} now={now} />
         <AlertsCard state={state} now={now} limit={4} />
       </div>

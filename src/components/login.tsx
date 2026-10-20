@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { KeyRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { saveToken } from '@/lib/data';
+import { BRAND, PixelLogo } from './brand';
 import { Button } from './ui/button';
 
 /** Server ADMIN_TOKEN bilan himoyalangan bo'lsa ko'rinadi. Token brauzerda (localStorage) saqlanadi. */
@@ -23,10 +23,10 @@ export function Login({ message }: { message?: string }) {
     <main className="grid min-h-screen place-items-center px-4">
       <form onSubmit={submit} className="card grid w-full max-w-[380px] gap-4 p-6">
         <div className="flex items-center gap-2.5">
-          <span className="grid size-9 place-items-center rounded-[10px] bg-accent text-accent-ink"><KeyRound size={18} /></span>
+          <PixelLogo size={44} />
           <div>
-            <h1 className="font-display text-[17px] font-semibold tracking-[-0.015em]">Kontent Zavod</h1>
-            <p className="text-[12.5px] text-muted">Panelga kirish</p>
+            <h1 className="font-display text-[18px] font-semibold tracking-[-0.02em]">{BRAND.product}</h1>
+            <p className="text-[12.5px] text-muted">{BRAND.tagline} · panelga kirish</p>
           </div>
         </div>
         <label className="grid gap-1.5">

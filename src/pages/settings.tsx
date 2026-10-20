@@ -11,7 +11,7 @@ export function SettingsPage() {
   const { state, mode } = useAppState();
   const act = useAct();
   const replace = useReplaceState();
-  const theme = (ls.get('kz-theme') ?? 'system') as 'system' | 'dark' | 'light';
+  const theme = (ls.get('kz-theme') ?? 'dark') as 'system' | 'dark' | 'light';
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>

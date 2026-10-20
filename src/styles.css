@@ -178,3 +178,10 @@
     animation: none !important;
   }
 }
+
+/* PixelMind: "jonli" piksel indikatorlari (avtopilot, ishlanayotgan bosqich) */
+@keyframes pm-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes pm-dot { 0%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-3px); opacity: 1; } }
+.pm-live { animation: pm-live 1.8s ease-in-out infinite; }
+.pm-dot { animation: pm-dot 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pm-live, .pm-dot { animation: none; } }

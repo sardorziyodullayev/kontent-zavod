@@ -174,7 +174,7 @@ export function seed(now = Date.now()): State {
 
   const state: State = {
     version: 1, seededAt: now, nextId: { v: vid, p: pidn },
-    workspace: { name: 'Kontent Zavod', timezone: 'Asia/Tashkent', autoPublish: true },
+    workspace: { name: 'PixelMind', timezone: 'Asia/Tashkent', autoPublish: true },
     goals: { monthlySubs: 9000, monthlyViews: 2500000, weeklyVideos: 7 },
     platforms, videos, activity: [],
   };
@@ -191,7 +191,7 @@ export function emptyState(now = Date.now(), from?: State, keep: Video[] = []): 
   const platforms: Platform[] = PLATFORMS.map(({ id }) => ({ id, handle: '', base: 0, connected: false, tokenExpiresAt: null, organicPerDay: 0, since: now, manualDelta: 0 }));
   const state: State = {
     version: 1, seededAt: now, nextId: from?.nextId ?? { v: 1, p: 1 },
-    workspace: { name: from?.workspace.name ?? 'Kontent Zavod', timezone: 'Asia/Tashkent', autoPublish: false },
+    workspace: { name: from?.workspace.name ?? 'PixelMind', timezone: 'Asia/Tashkent', autoPublish: false },
     goals: { monthlySubs: 1000, monthlyViews: 100000, weeklyVideos: 3 },
     platforms, videos: structuredClone(keep), activity: [],
   };

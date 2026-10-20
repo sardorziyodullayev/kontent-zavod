@@ -8,17 +8,11 @@ import { cn } from '@/lib/utils';
 import { CommandPalette } from './command-palette';
 import { Dialogs } from './dialogs';
 import { Login } from './login';
+import { AutopilotBadge } from './factory-now';
 import { NAV } from './nav';
+import { BRAND, PixelLogo } from './brand';
 import { Button } from './ui/button';
 import { VideoSheet } from './video-sheet';
-
-function Logo() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 20V10l5 3v-3l5 3V6l8 4v10z" />
-    </svg>
-  );
-}
 
 function Sidebar({ data }: { data: AppData }) {
   const menu = useUI((s) => s.menu);
@@ -26,19 +20,20 @@ function Sidebar({ data }: { data: AppData }) {
   const crit = alerts(data.state, now).filter((a) => a.level === 'critical').length;
   return (
     <aside className={cn('fixed top-0 z-[60] flex h-screen w-[260px] flex-col gap-1 border-r border-line bg-surface px-3 py-[18px] shadow-pop transition-transform md:sticky md:w-auto md:translate-x-0 md:bg-page md:shadow-none', menu ? 'translate-x-0' : '-translate-x-full')} aria-label="Asosiy menyu">
-      <Link to="/" className="flex items-center gap-2.5 px-2.5 pt-1 pb-[18px]">
-        <span className="grid size-[30px] place-items-center rounded-lg bg-accent text-accent-ink"><Logo /></span>
+      <Link to="/" className="flex items-center gap-3 px-2.5 pt-1 pb-[18px]">
+        <PixelLogo size={34} />
         <span>
-          <span className="block font-display text-[15px] leading-tight font-semibold">{data.state.workspace.name}</span>
-          <span className="text-[11px] text-muted">kontent zavodi</span>
+          <span className="block font-display text-[16px] leading-tight font-semibold tracking-[-0.02em]">{data.state.workspace.name}</span>
+          <span className="text-[11.5px] text-muted">{BRAND.tagline}</span>
         </span>
       </Link>
       <nav className="grid gap-0.5">
         {NAV.map((n, i) => (
           <div key={n.to}>
-            {i === NAV.length - 1 && <div className="mx-2 my-2.5 h-px bg-line" />}
+            {(i === 0 || NAV[i - 1].group !== n.group) && <div className={cn('px-2.5 pb-1.5 text-[10.5px] font-semibold tracking-[0.12em] text-muted uppercase', i > 0 && 'mt-4')}>{n.group}</div>}
             <Link to={n.to} onClick={() => setUI({ menu: false })} activeOptions={{ exact: n.to === '/' }}
-              className="group flex items-center gap-[11px] rounded-[9px] px-2.5 py-[9px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink data-[status=active]:bg-surface-2 data-[status=active]:text-ink">
+              className="group relative flex items-center gap-[11px] rounded-[9px] px-2.5 py-[9px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink data-[status=active]:bg-surface-2 data-[status=active]:text-ink">
+              <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-accent opacity-0 group-data-[status=active]:opacity-100" />
               <n.icon size={18} className="group-data-[status=active]:text-accent-text" />
               {n.name}
               {n.to === '/' && crit > 0 && <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-critical px-1.5 text-[11px] font-bold text-white" title="Muhim ogohlantirishlar">{crit}</span>}
@@ -47,10 +42,7 @@ function Sidebar({ data }: { data: AppData }) {
         ))}
       </nav>
       <div className="mt-auto px-1">
-        <div className="flex items-center gap-2 rounded-[9px] border border-line bg-surface p-2.5 text-xs text-ink-2">
-          <span className={cn('size-2 shrink-0 rounded-full', data.mode === 'server' ? 'bg-good' : 'bg-warning')} />
-          {data.mode === 'server' ? `Server ulangan · ${data.state.workspace.autoPublish ? 'simulyatsiya' : 'worker rejimi'}` : 'Demo rejim · ma’lumot brauzerda'}
-        </div>
+        <AutopilotBadge data={data} />
       </div>
     </aside>
   );
@@ -62,7 +54,7 @@ export function Shell() {
   const menu = useUI((s) => s.menu);
   const theme = useUI((s) => s.theme);
   const page = NAV.find((n) => n.to === path) ?? NAV[0];
-  useEffect(() => { document.title = `${page.name} · ${data?.state.workspace.name ?? 'Kontent Zavod'}`; }, [page, data?.state.workspace.name]);
+  useEffect(() => { document.title = `${page.name} · ${data?.state.workspace.name ?? BRAND.product}`; }, [page, data?.state.workspace.name]);
 
   if (error instanceof AuthError) return <Login message={error.message} />;
   if (!data) return isLoading ?<div className="p-10 text-muted">Yuklanmoqda…</div> : <div className="p-10 text-critical-text">Ma’lumot yuklanmadi: {String(error)}</div>;
