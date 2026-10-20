@@ -41,7 +41,7 @@ describe('yadro', () => {
 
   test('to‘liq oqim: yaratish → tayyorlash → rejalashtirish → worker → statistika', () => {
     const s = C.seed(NOW);
-    const v = C.applyAction(s, { type: 'video.create', payload: { title: 'Test', topic: 'Hazil' } }, NOW) as C.Video;
+    const v = C.applyAction(s, { type: 'video.create', payload: { title: 'Test', topic: 'Avtomatlashtirish' } }, NOW) as C.Video;
     for (const c of C.CHECKLIST) C.applyAction(s, { type: 'video.check', payload: { id: v.id, key: c.id, value: true } }, NOW);
     expect(v.status).toBe('ready');
     const p = C.applyAction(s, { type: 'post.schedule', payload: { videoId: v.id, platform: 'tiktok', scheduledAt: NOW + C.DAY } }, NOW) as C.Post;

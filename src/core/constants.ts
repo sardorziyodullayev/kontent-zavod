@@ -37,7 +37,7 @@ export const CHECKLIST: { id: ChecklistKey; name: string }[] = [
   { id: 'approved', name: 'Yakuniy tasdiq' },
 ];
 
-export const TOPICS = ['AI vositalari', 'Biznes g‘oyalar', 'Texno yangiliklar', 'Darslik', 'Motivatsiya', 'Hazil'];
+export const TOPICS = ['AI vositalari', 'Biznes uchun AI', 'AI yangiliklar', 'Darslik', 'AI bilan daromad', 'Avtomatlashtirish'];
 export const FORMATS: { id: Format; name: string }[] = [
   { id: 'short', name: 'Qisqa (Shorts/Reels)' },
   { id: 'long', name: 'Uzun video' },

@@ -34,7 +34,7 @@ const MODEL: Record<PlatformId, PlatformModel> = {
   facebook: { short: 2300, long: 0, tauShort: 26, subs: 0.003, peak: 13, peak2: 20, organic: 4, dow: [1, 1, 1, 1, 1, 0.95, 0.9] },
 };
 export const supportsLong = (pid: PlatformId) => MODEL[pid].long > 0;
-const TOPIC_FACTOR: Record<string, number> = { 'AI vositalari': 1.45, 'Biznes g‘oyalar': 1.1, 'Texno yangiliklar': 1.0, Darslik: 0.9, Motivatsiya: 0.78, Hazil: 1.25 };
+const TOPIC_FACTOR: Record<string, number> = { 'AI vositalari': 1.45, 'Biznes uchun AI': 1.1, 'AI yangiliklar': 1.0, Darslik: 0.9, 'AI bilan daromad': 1.2, Avtomatlashtirish: 1.25 };
 const hourFactor = (pid: PlatformId, h: number) => {
   const m = MODEL[pid];
   return 0.5 + 0.75 * Math.max(gauss(h, m.peak, 2.3), gauss(h + 24, m.peak, 2.3)) + 0.3 * gauss(h, m.peak2, 1.8);
@@ -52,7 +52,7 @@ function makeModel(rng: Rng, pid: PlatformId, video: Video, publishedAt: number,
     tau: long ? m.tauLong! : m.tauShort * (0.8 + rng() * 0.5),
     like: 0.03 + rng() * 0.05 + (ret - 0.4) * 0.03,
     comment: 0.002 + rng() * 0.008,
-    share: 0.003 + rng() * 0.015 * (video.topic === 'Hazil' ? 2 : 1),
+    share: 0.003 + rng() * 0.015 * (video.topic === 'Avtomatlashtirish' ? 2 : 1),
     save: 0.004 + rng() * 0.02 * (video.topic === 'Darslik' || video.topic === 'AI vositalari' ? 1.6 : 1),
     subs: m.subs * (0.6 + rng() * 0.8) * (long ? 1.8 : 1),
     ret,
@@ -63,13 +63,13 @@ function makeModel(rng: Rng, pid: PlatformId, video: Video, publishedAt: number,
 // ---------- seed ----------
 const TITLES: Record<string, string[]> = {
   'AI vositalari': ['ChatGPT bilan 5 daqiqada biznes-reja', 'Bu AI sizning ishingizni bajaradi', 'Sun’iy intellekt 10 soniyada logo chizdi', 'Telefoningizdagi yashirin AI funksiyalar', 'AI bilan ovozni klon qilish: xavfli tomoni', 'Prezentatsiyani AI 1 daqiqada tayyorladi', 'Eng foydali 5 ta bepul AI sayt', 'AI rezyume yozdi — HR nima dedi?', 'Midjourney va bepul muqobillari', 'AI bilan inglizcha gapirishni mashq qilish', 'Claude bilan kod yozish: 0 dan bot'],
-  'Biznes g‘oyalar': ['100$ bilan boshlasa bo‘ladigan 3 biznes', 'Toshkentda 1 kunlik startap', 'Do‘kon uchun Telegram bot qanchaga tushadi', 'Uydan turib pul ishlashning 4 yo‘li', 'Freelancega birinchi buyurtma qanday olinadi', 'Kofe-bar ochish: haqiqiy raqamlar', 'Marketpleysda sotish: Uzum vs Wildberries', 'Kichik biznes uchun SMM xatolar'],
-  'Texno yangiliklar': ['Yangi iPhone: olish kerakmi?', 'Eng arzon mikrofon testi', 'Bu hafta texnologiyada nima bo‘ldi', '5G O‘zbekistonda: tezlik testi', 'Arzon noutbuk talabalar uchun', 'Xiaomi vs Samsung: kamera bellashuvi', 'Elektromobil quvvatlash: Toshkent tajribasi'],
+  'Biznes uchun AI': ['Do‘koningizga AI sotuvchi', 'AI bilan reklama video 0 so‘mga', 'Restoran uchun AI menyu', 'Kichik biznesga 3 ta AI vosita', 'AI bilan raqobatchini tahlil qilish', 'Mijoz yo‘qotishni AI to‘xtatadi', 'AI bilan narx belgilash', 'Biznes-reja 5 daqiqada'],
+  'AI yangiliklar': ['Bu hafta AI’da nima bo‘ldi', 'Yangi ChatGPT: nima o‘zgardi', 'Google’ning yangi AI’si sinovda', 'AI video generatorlar taqqosi', 'Claude yangi versiyasi: test', 'AI telefonlar: kerakmi?', 'Bu AI bepul bo‘ldi', 'O‘zbek tilini tushunadigan AI’lar'],
   Darslik: ['Python’ni 30 kunda o‘rganish rejasi', 'Telefonda kino sifatida video olish', 'Montajda 3 ta tezkor hiyla', 'Video uchun ssenariy yozish formulasi', 'Mobilografiya: yorug‘lik sirlari', 'Excel’da 1 daqiqada hisobot', 'CapCut’da subtitr avtomatik', 'Kanalni 0 dan 10K gacha olib chiqish'],
-  Motivatsiya: ['Ertalabki 5 odat hayotni o‘zgartiradi', 'Nega ko‘pchilik 1-yilda taslim bo‘ladi', 'Kitob o‘qishni qanday odat qilish mumkin', '1% qoidasi', 'Telefonga qaramlikdan qutulish', 'Vaqtni boshqarish: 2 daqiqa qoidasi', 'Muvaffaqiyatsizlikdan keyin nima qilish kerak'],
-  Hazil: ['Dasturchi va buyurtmachi', 'Online dars vs real hayot', 'Toshkent tirbandligida 1 kun', 'Onam va Wi-Fi paroli', 'Freelancer dushanba kuni', 'Talaba imtihon oldidan', 'Taksichi va navigator', 'Ish suhbatida kutilmagan savol', 'Yangi yil oldidan bozor'],
+  'AI bilan daromad': ['AI bilan frilansda birinchi 100$', 'ChatGPT bilan matn yozib pul topish', 'AI rasm sotish: real tajriba', 'Kanal uchun AI ovoz: daromad hisobi', 'AI xizmatini qanchaga sotish kerak', 'Bir kunlik AI frilanser ish kuni', 'AI bilan qo‘shimcha daromadning 5 yo‘li', 'Mijozni qayerdan topish mumkin'],
+  'Avtomatlashtirish': ['Do‘kon uchun buyurtma boti 1 kunda', 'Excel’dagi ishni AI bajaradi', 'Telegram kanal o‘zi post joylaydi', 'Mijoz savollariga AI javob beradi', 'Hisobotni avtomatik yuborish', 'CRM’siz mijozlar bazasi', 'Instagram izohlariga avtomatik javob', 'Bir tugma bilan 10 ta post'],
 };
-export const HASHTAGS: Record<string, string> = { 'AI vositalari': '#ai #chatgpt #suniyintellekt #texnologiya', 'Biznes g‘oyalar': '#biznes #startap #pul #uzbekistan', 'Texno yangiliklar': '#texno #gadjet #yangiliklar', Darslik: '#darslik #oqish #foydali', Motivatsiya: '#motivatsiya #odatlar #rivojlanish', Hazil: '#hazil #kulgi #toshkent' };
+export const HASHTAGS: Record<string, string> = { 'AI vositalari': '#ai #suniyintellekt #chatgpt #pixelmind', 'Biznes uchun AI': '#biznes #ai #tadbirkor #uzbekistan', 'AI yangiliklar': '#ainews #texnologiya #yangiliklar #pixelmind', Darslik: '#darslik #ai #amaliy #pixelmind', 'AI bilan daromad': '#daromad #ai #frilans #pul', 'Avtomatlashtirish': '#avtomatlashtirish #telegrambot #ai #biznes' };
 export const emptyScript = (topic = ''): Script => ({ template: '', hook: '', body: '', cta: '', hashtags: HASHTAGS[topic] ?? '', description: '' });
 export const emptyChecklist = () => Object.fromEntries(CHECKLIST.map((c) => [c.id, false])) as Video['checklist'];
 
@@ -134,14 +134,14 @@ export function seed(now = Date.now()): State {
   // kelajak: rejalashtirilgan videolar
   const plan: { title: string; d: number; h: number; plats: PlatformId[]; done: number; topic: string; format?: Format }[] = [
     { title: 'Claude bilan 1 kunda sayt yasadim', d: 0, h: 20, plats: ['tiktok', 'instagram', 'youtube'], done: 8, topic: 'AI vositalari' },
-    { title: 'Oyiga 1000$: kichik biznes hisob-kitobi', d: 1, h: 19, plats: ['tiktok', 'instagram'], done: 8, topic: 'Biznes g‘oyalar' },
-    { title: 'Haftalik texno-dayjest #42', d: 1, h: 9, plats: ['telegram'], done: 6, topic: 'Texno yangiliklar' },
-    { title: 'Ota-onam AI ishlatsa', d: 2, h: 21, plats: ['tiktok', 'youtube', 'facebook'], done: 5, topic: 'Hazil' },
+    { title: 'Oyiga 1000$: kichik biznes hisob-kitobi', d: 1, h: 19, plats: ['tiktok', 'instagram'], done: 8, topic: 'Biznes uchun AI' },
+    { title: 'Haftalik texno-dayjest #42', d: 1, h: 9, plats: ['telegram'], done: 6, topic: 'AI yangiliklar' },
+    { title: 'Ota-onam AI ishlatsa', d: 2, h: 21, plats: ['tiktok', 'youtube', 'facebook'], done: 5, topic: 'Avtomatlashtirish' },
     { title: 'CapCut to‘liq kurs: 1-dars', d: 3, h: 18, plats: ['youtube', 'telegram'], done: 4, topic: 'Darslik', format: 'long' },
     { title: 'Ovozingizni AI bilan 5 tilga tarjima qiling', d: 4, h: 20, plats: ['tiktok', 'instagram'], done: 3, topic: 'AI vositalari' },
-    { title: 'Bir yil har kuni video joyladim — natija', d: 6, h: 21, plats: ['tiktok', 'instagram', 'youtube'], done: 2, topic: 'Motivatsiya' },
-    { title: 'Telegram do‘kon: 0 dan birinchi savdogacha', d: 8, h: 19, plats: ['tiktok', 'instagram'], done: 1, topic: 'Biznes g‘oyalar' },
-    { title: 'Eng yaxshi budjet smartfon 2026', d: 10, h: 20, plats: ['tiktok', 'youtube'], done: 1, topic: 'Texno yangiliklar' },
+    { title: 'Bir yil har kuni video joyladim — natija', d: 6, h: 21, plats: ['tiktok', 'instagram', 'youtube'], done: 2, topic: 'AI bilan daromad' },
+    { title: 'Telegram do‘kon: 0 dan birinchi savdogacha', d: 8, h: 19, plats: ['tiktok', 'instagram'], done: 1, topic: 'Biznes uchun AI' },
+    { title: 'Eng yaxshi budjet smartfon 2026', d: 10, h: 20, plats: ['tiktok', 'youtube'], done: 1, topic: 'AI yangiliklar' },
   ];
   for (const p of plan) {
     let t = at(today + p.d * DAY, p.h);
