@@ -1,0 +1,13 @@
+{
+  "name": "kontent-zavod",
+  "version": "1.0.0",
+  "description": "Kontent zavod: videolarni ijtimoiy tarmoqlarga joylash, reja va analitika admin paneli",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "test": "node --test",
+    "worker": "node --env-file-if-exists=.env tools/worker.mjs"
+  }
+}
