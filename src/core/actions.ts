@@ -165,7 +165,7 @@ export function applyAction(state: State, action: Action, now = Date.now()): unk
       if (patch.connected != null) {
         pl.connected = patch.connected;
         if (patch.connected) {
-          pl.tokenExpiresAt = now + 60 * 24 * 3600e3;
+          pl.tokenExpiresAt = pl.id === 'telegram' ? null : now + 60 * 24 * 3600e3; // bot tokeni muddatsiz
           log(state, now, 'connect', `${pname(pl.id)} qayta ulandi`);
         }
       }

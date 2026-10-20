@@ -157,7 +157,9 @@ export function alerts(state: State, now: number): Alert[] {
     }
   }
   for (const pl of state.platforms) {
-    if (!pl.connected) out.push({ level: 'critical', platformId: pl.id, title: `${pname(pl.id)} ulanmagan`, text: 'Token eskirgan yoki ulanish uzilgan. Platformalar bo‘limida qayta ulang.', t: pl.tokenExpiresAt ?? now });
+    // hech qachon ulanmagan va rejasi yo'q platforma — ogohlantirish emas
+    const planned = allPosts(state).some(({ p }) => p.platform === pl.id && p.status === 'scheduled');
+    if (!pl.connected && (pl.tokenExpiresAt != null || planned)) out.push({ level: 'critical', platformId: pl.id, title: `${pname(pl.id)} ulanmagan`, text: 'Token eskirgan yoki ulanish uzilgan. Platformalar bo‘limida qayta ulang.', t: pl.tokenExpiresAt ?? now });
     else if (pl.tokenExpiresAt && pl.tokenExpiresAt - now < 7 * DAY) out.push({ level: 'warning', platformId: pl.id, title: `${pname(pl.id)} tokeni tugayapti`, text: `${fmtDur(pl.tokenExpiresAt - now)} ichida yangilang, aks holda avtomatik joylash to‘xtaydi.`, t: pl.tokenExpiresAt });
   }
   const empty: number[] = [];

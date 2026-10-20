@@ -1,4 +1,4 @@
-import { Download, LogOut, RefreshCw, Upload } from 'lucide-react';
+import { Download, LogOut, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { allPosts, fmtDate, fmtTime, toCSV, type State } from '@/core';
 import { useAppState } from '@/components/shell';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -42,7 +42,7 @@ export function SettingsPage() {
         {mode === 'server' && ls.get('kz-token') && <Button className="mt-3" onClick={() => { logout(); location.reload(); }}><LogOut size={16} />Paneldan chiqish</Button>}
       </Card>
       <Card>
-        <CardHead title="Ma’lumotlar" sub={mode === 'server' ? 'serverda: data/zavod.db (SQLite)' : 'brauzer xotirasida (demo)'} />
+        <CardHead title="Ma’lumotlar" sub={mode === 'server' ? 'serverda: zavod.db (SQLite)' : 'brauzer xotirasida (demo)'} />
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => download(`kontent-zavod-${today()}.json`, JSON.stringify(state, null, 1), 'application/json')}><Download size={16} />JSON eksport</Button>
           <Button onClick={() => download(`kontent-zavod-${today()}.csv`, '﻿' + toCSV(state, Date.now()), 'text/csv;charset=utf-8')}><Download size={16} />CSV eksport</Button>
@@ -58,7 +58,8 @@ export function SettingsPage() {
               } catch (err) { alert((err as Error).message); }
             }} />
           </label>
-          <Button variant="danger" onClick={() => confirm('Barcha ma’lumotlar demo holatiga qaytarilsinmi?') && replace('reset')}><RefreshCw size={16} />Demo ma’lumotlarni tiklash</Button>
+          <Button variant="danger" onClick={() => confirm('Barcha videolar, postlar va statistika o‘chirilsinmi? Avval JSON eksport qilib oling.') && replace('empty')}><Trash2 size={16} />Hammasini tozalash</Button>
+          {mode === 'demo' && <Button variant="danger" onClick={() => confirm('Barcha ma’lumotlar demo holatiga qaytarilsinmi?') && replace('reset')}><RefreshCw size={16} />Demo ma’lumotlarni tiklash</Button>}
         </div>
         <p className="mt-3 text-[12.5px] text-muted">Videolar: {state.videos.length} · Postlar: {allPosts(state).length}{state.updatedAt ? ` · Oxirgi yangilanish: ${fmtDate(state.updatedAt)} ${fmtTime(state.updatedAt)}` : ''}</p>
       </Card>

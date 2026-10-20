@@ -14,7 +14,8 @@ ENV NODE_ENV=production \
     PORT=4310 \
     DATA_DIR=/data \
     MEDIA_DIR=/data/media \
-    WORKER=1
+    WORKER=1 \
+    SEED=empty
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json tsconfig.json ./

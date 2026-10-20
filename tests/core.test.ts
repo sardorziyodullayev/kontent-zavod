@@ -73,4 +73,17 @@ describe('yadro', () => {
     expect(C.insights(s, NOW).length).toBeGreaterThan(0);
     expect(C.toCSV(s, NOW).startsWith('"video_id","sarlavha"')).toBe(true);
   });
+  test('toza holat: namunaviy ma’lumotsiz, simulyatsiya o‘chiq, analitika buzilmaydi', () => {
+    const demo = C.seed(NOW);
+    const keep = demo.videos.filter((v) => v.posts.some((p) => p.platform === 'telegram' && p.status === 'published')).slice(-1);
+    keep[0].posts.forEach((p) => { p.model = null; }); // haqiqiy post: statistika hali kelmagan
+    const s = C.emptyState(NOW, demo, keep);
+    expect(s.workspace.autoPublish).toBe(false);
+    expect(s.videos.length).toBe(1);
+    expect(s.nextId).toEqual(demo.nextId);
+    expect(C.followersAt(s, 'telegram', NOW + C.DAY)).toBe(0);
+    C.applyAction(s, { type: 'platform.update', payload: { id: 'telegram', patch: { followers: 412 } } }, NOW);
+    expect(C.followersAt(s, 'telegram', NOW + C.DAY)).toBe(412);
+    expect(() => { C.kpis(s, NOW, 30); C.alerts(s, NOW); C.insights(s, NOW); C.nextQueue(s, NOW); C.dailySeries(s, NOW - 30 * C.DAY, NOW); }).not.toThrow();
+  });
 });

@@ -1,7 +1,7 @@
 // Ma'lumot qatlami: server bo'lsa API, bo'lmasa (GitHub Pages) brauzer xotirasidagi demo.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { applyAction, seed, tick, type Action, type State } from '@/core';
+import { applyAction, emptyState, seed, tick, type Action, type State } from '@/core';
 import { ls } from './utils';
 
 export type Mode = 'server' | 'demo';
@@ -91,14 +91,14 @@ export function useAct() {
 
 export function useReplaceState() {
   const qc = useQueryClient();
-  return async (next: State | 'reset') => {
+  return async (next: State | 'reset' | 'empty') => {
     const cur = qc.getQueryData<AppData>(['state']);
     if (cur?.mode === 'server') {
-      if (next === 'reset') await request('/reset', {});
+      if (next === 'reset' || next === 'empty') await request('/reset', { empty: next === 'empty' });
       else await request('/import', next);
       await qc.invalidateQueries({ queryKey: ['state'] });
     } else {
-      const s = next === 'reset' ? seed(Date.now()) : tick(next, Date.now());
+      const s = next === 'reset' ? seed(Date.now()) : next === 'empty' ? emptyState(Date.now(), cur?.state) : tick(next, Date.now());
       ls.set(LS_STATE, JSON.stringify(s));
       qc.setQueryData(['state'], { mode: 'demo', state: s });
     }

@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import { bearerAuth } from 'hono/bearer-auth';
 import { HTTPException } from 'hono/http-exception';
 import { logger } from 'hono/logger';
-import { ActionError, applyAction, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
+import { ActionError, applyAction, emptyState, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
 import { initDb, loadState, saveState } from './db';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,7 +22,8 @@ if (process.env.NODE_ENV === 'production' && TOKEN.length < 16) {
 }
 
 await initDb();
-let state: State = (await loadState()) ?? seed(Date.now());
+// SEED=empty: bo'sh bazada namunaviy ma'lumot yaratilmaydi (production).
+let state: State = (await loadState()) ?? (process.env.SEED === 'empty' ? emptyState(Date.now()) : seed(Date.now()));
 await saveState(state);
 
 // Amallar ketma-ket bajariladi: bir vaqtda kelgan ikki so'rov holatni buzmasin.
@@ -59,7 +60,16 @@ const api = new Hono()
     const result = await act({ type: body.type, payload: body.payload ?? {} } as Action);
     return c.json({ ok: true, result, now: Date.now(), state });
   })
-  .post('/reset', async (c) => { await serial(async () => { state = seed(Date.now()); await saveState(state); }); return c.json({ ok: true, state }); })
+  // {empty:true, keep:['v118']}: toza holat (ko'rsatilgan videolar saqlanadi); bo'lmasa namunaviy ma'lumot
+  .post('/reset', async (c) => {
+    const b = await c.req.json<{ empty?: boolean; keep?: string[] }>().catch(() => ({}) as { empty?: boolean; keep?: string[] });
+    await serial(async () => {
+      const now = Date.now();
+      state = b.empty ? emptyState(now, state, state.videos.filter((v) => b.keep?.includes(v.id))) : seed(now);
+      await saveState(state);
+    });
+    return c.json({ ok: true, state });
+  })
   .post('/import', async (c) => {
     const b = await c.req.json<State>();
     if (!Array.isArray(b?.videos) || !Array.isArray(b?.platforms)) throw new HTTPException(400, { message: 'Fayl noto‘g‘ri' });
@@ -89,6 +99,12 @@ app.onError((err, c) => {
 app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: 'Topilmadi' }, 404) : c.text('Topilmadi', 404)));
 
 if (fs.existsSync(DIST)) {
+  // index.html har safar tekshiriladi (yangi deploydan keyin eski panel qolmasin), hashli assets uzoq keshlanadi
+  app.use('/*', async (c, next) => {
+    await next();
+    if (c.req.path.startsWith('/api/')) return;
+    c.header('Cache-Control', c.req.path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
+  });
   app.use('/*', serveStatic({ root: path.relative(process.cwd(), DIST) || '.' }));
   app.get('*', (c) => c.html(fs.readFileSync(path.join(DIST, 'index.html'), 'utf8')));
 }

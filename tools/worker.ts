@@ -64,7 +64,21 @@ const adapters: Record<PlatformId, Adapter> = {
   },
 };
 
+/** Telegram kanal obunachilari soni (getChatMemberCount). O'zgarganda panelga yoziladi. */
+let tgFollowers: number | null = null;
+async function syncTelegram() {
+  if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL) return;
+  const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getChatMemberCount?chat_id=${encodeURIComponent(process.env.TELEGRAM_CHANNEL)}`;
+  const res: { ok: boolean; result?: number; description?: string } = await (await fetch(url)).json();
+  if (!res.ok || res.result == null) throw new Error(`Telegram obunachilar: ${res.description}`);
+  if (res.result === tgFollowers) return;
+  await api('/api/action', { type: 'platform.update', payload: { id: 'telegram', patch: { followers: res.result } } });
+  console.log('Telegram obunachilar:', res.result);
+  tgFollowers = res.result;
+}
+
 async function runOnce() {
+  await syncTelegram().catch((e: Error) => console.error(e.message));
   const queue = await api<QueueItem[]>('/api/queue');
   const due = queue.filter((j) => j.dueIn <= 0 && (!ONLY || j.postId === ONLY));
   if (!due.length) return console.log(new Date().toISOString(), `navbatda ${queue.length} ta, vaqti kelgani yo‘q`);
