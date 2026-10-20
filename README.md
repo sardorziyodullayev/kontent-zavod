@@ -81,6 +81,18 @@ Serverni internetga chiqarsangiz `ADMIN_TOKEN` o'rnating (`.env.example` dan `.e
 
 3. Tekshiruv manzili: `GET /api/health` (token so'ramaydi).
 
+### Railway
+
+Ishlab turgan panel Railway'da joylashgan: `kontent-zavod` loyihasi, `web` xizmati, `/data` diski. Xizmat GitHub reposiga ulangan, shuning uchun `main` ga qilingan har bir push avtomatik deploy qilinadi. Sozlamalar [railway.json](railway.json) faylida (healthcheck `/api/health`).
+
+```bash
+npm i -g @railway/cli
+railway login
+railway link            # kontent-zavod → web
+railway logs            # server loglari
+railway variable list   # o'zgaruvchilar
+```
+
 Haqiqiy joylash uchun panelda simulyatsiyani o'chiring (*Konveyer va API*). Simulyatsiya yoqilgan paytda worker hech narsa yubormaydi.
 
 | Buyruq | Vazifasi |
