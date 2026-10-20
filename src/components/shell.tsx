@@ -2,11 +2,12 @@ import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { Menu, Moon, Plus, Search, Sun } from 'lucide-react';
 import { useEffect } from 'react';
 import { alerts } from '@/core';
-import { useAppData, useNow, type AppData } from '@/lib/data';
+import { AuthError, useAppData, useNow, type AppData } from '@/lib/data';
 import { openModal, setTheme, setUI, useUI } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { CommandPalette } from './command-palette';
 import { Dialogs } from './dialogs';
+import { Login } from './login';
 import { NAV } from './nav';
 import { Button } from './ui/button';
 import { VideoSheet } from './video-sheet';
@@ -63,7 +64,8 @@ export function Shell() {
   const page = NAV.find((n) => n.to === path) ?? NAV[0];
   useEffect(() => { document.title = `${page.name} · ${data?.state.workspace.name ?? 'Kontent Zavod'}`; }, [page, data?.state.workspace.name]);
 
-  if (!data) return isLoading ? <div className="p-10 text-muted">Yuklanmoqda…</div> : <div className="p-10 text-critical-text">Ma’lumot yuklanmadi: {String(error)}</div>;
+  if (error instanceof AuthError) return <Login message={error.message} />;
+  if (!data) return isLoading ?<div className="p-10 text-muted">Yuklanmoqda…</div> : <div className="p-10 text-critical-text">Ma’lumot yuklanmadi: {String(error)}</div>;
 
   return (
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[236px_minmax(0,1fr)]">

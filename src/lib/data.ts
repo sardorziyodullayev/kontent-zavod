@@ -20,6 +20,19 @@ function loadDemo(): AppData {
   return { mode: 'demo', state: s };
 }
 
+/** Server ADMIN_TOKEN so'rayapti: panel kirish oynasini ko'rsatadi. */
+export class AuthError extends Error {
+  constructor(message = 'Kirish kerak') { super(message); }
+}
+
+const authHeader = (): Record<string, string> => {
+  const tok = ls.get(LS_TOKEN);
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
+};
+
+export const saveToken = (t: string) => ls.set(LS_TOKEN, t.trim());
+export const logout = () => ls.del(LS_TOKEN);
+
 let detected: Mode | null = null;
 async function fetchState(): Promise<AppData> {
   if (detected !== 'demo') {
@@ -27,11 +40,15 @@ async function fetchState(): Promise<AppData> {
     for (let attempt = 0; attempt < 5; attempt++) {
       let transient = false;
       try {
-        const r = await fetch(`${API}/state`, { cache: 'no-store' });
+        const r = await fetch(`${API}/state`, { cache: 'no-store', headers: authHeader() });
+        if (r.status === 401) { detected = 'server'; throw new AuthError(ls.get(LS_TOKEN) ? 'Token noto‘g‘ri' : undefined); }
         transient = r.status >= 500;
         const j = r.ok ? await r.json().catch(() => null) : null;
         if (j?.mode === 'server') { detected = 'server'; return { mode: 'server', state: j.state }; }
-      } catch { transient = true; }
+      } catch (e) {
+        if (e instanceof AuthError) throw e;
+        transient = true;
+      }
       if (!transient) break;
       await new Promise((ok) => setTimeout(ok, 800));
     }
@@ -41,22 +58,16 @@ async function fetchState(): Promise<AppData> {
   return loadDemo();
 }
 
-async function request<T>(path: string, body: unknown, retry = true): Promise<T> {
-  const tok = ls.get(LS_TOKEN);
-  const r = await fetch(`${API}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) }, body: JSON.stringify(body) });
-  if (r.status === 401 && retry) {
-    const t = prompt('Admin token (ADMIN_TOKEN):');
-    if (!t) throw new Error('Token kiritilmadi');
-    ls.set(LS_TOKEN, t);
-    return request(path, body, false);
-  }
+async function request<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${API}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() }, body: JSON.stringify(body) });
+  if (r.status === 401) { logout(); location.reload(); throw new AuthError('Sessiya tugadi, qayta kiring'); }
   const j = await r.json();
   if (!r.ok) throw new Error(j.error ?? 'Xato');
   return j;
 }
 
 export const useAppData = () =>
-  useQuery({ queryKey: ['state'], queryFn: fetchState, refetchInterval: 60_000, staleTime: 20_000, refetchOnWindowFocus: true });
+  useQuery({ queryKey: ['state'], queryFn: fetchState, retry: (n, e) => !(e instanceof AuthError) && n < 3, refetchInterval: 60_000, staleTime: 20_000, refetchOnWindowFocus: true });
 
 /** Amal bajaradi va yangi holatni keshga yozadi. Natija (masalan yangi video) qaytariladi. */
 export function useAct() {

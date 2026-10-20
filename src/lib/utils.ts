@@ -6,6 +6,7 @@ export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 export const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* xotira yopiq */ } },
+  del: (k: string) => { try { localStorage.removeItem(k); } catch { /* xotira yopiq */ } },
 };
 
 export function download(name: string, text: string, type: string) {

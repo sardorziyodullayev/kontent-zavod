@@ -63,7 +63,25 @@ npm start
 
 Shunda panel ham, API ham http://localhost:4310 da ishlaydi. Ma'lumotlar `data/zavod.db` (SQLite) faylida saqlanadi. Birinchi ishga tushirishda 90 kunlik namunaviy ma'lumot yaratiladi. Sozlamalar → *Demo ma'lumotlarni tiklash* bilan qayta boshlash mumkin.
 
-Serverni internetga chiqarsangiz `ADMIN_TOKEN` o'rnating (`.env.example` dan `.env` nusxa oling). Shunda barcha yozish amallari token so'raydi.
+Serverni internetga chiqarsangiz `ADMIN_TOKEN` o'rnating (`.env.example` dan `.env` nusxa oling). Shunda butun API token so'raydi, panel esa kirish oynasini ko'rsatadi. `NODE_ENV=production` da token kamida 16 belgi bo'lmasa server ishga tushmaydi.
+
+## Serverga chiqarish (Docker)
+
+[Dockerfile](Dockerfile) panel, API va joylash workerini bitta konteynerda ishga tushiradi. Docker'ni qo'llaydigan har qanday hostingda ishlaydi (Railway, Fly.io, Render, Koyeb, VPS).
+
+1. `/data` yo'liga doimiy disk (volume) ulang. Baza (`zavod.db`) va `media/` shu yerda saqlanadi.
+2. Muhit o'zgaruvchilari:
+
+| O'zgaruvchi | Qiymat |
+|---|---|
+| `ADMIN_TOKEN` | uzun tasodifiy satr, panelga kirish uchun |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL` | Telegram'ga joylash uchun |
+| `WORKER` | `1` (standart): worker server ichida ishlaydi. Alohida worker ishlatsangiz `0` qiling, aks holda post ikki marta joylanadi |
+| `DATABASE_URL`, `DATABASE_AUTH_TOKEN` | ixtiyoriy: diskli hosting bo'lmasa Turso (`libsql://…`) bazasi |
+
+3. Tekshiruv manzili: `GET /api/health` (token so'ramaydi).
+
+Haqiqiy joylash uchun panelda simulyatsiyani o'chiring (*Konveyer va API*). Simulyatsiya yoqilgan paytda worker hech narsa yubormaydi.
 
 | Buyruq | Vazifasi |
 |---|---|

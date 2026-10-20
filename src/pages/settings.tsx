@@ -1,9 +1,9 @@
-import { Download, RefreshCw, Upload } from 'lucide-react';
+import { Download, LogOut, RefreshCw, Upload } from 'lucide-react';
 import { allPosts, fmtDate, fmtTime, toCSV, type State } from '@/core';
 import { useAppState } from '@/components/shell';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Card, CardHead, Field, Segmented } from '@/components/ui/primitives';
-import { useAct, useReplaceState } from '@/lib/data';
+import { logout, useAct, useReplaceState } from '@/lib/data';
 import { setTheme } from '@/lib/ui';
 import { download, ls, today } from '@/lib/utils';
 
@@ -39,6 +39,7 @@ export function SettingsPage() {
         <CardHead title="Ko‘rinish" />
         <Segmented label="Mavzu" value={theme} onChange={setTheme} options={[{ value: 'system', label: 'Tizim' }, { value: 'dark', label: 'Qorong‘i' }, { value: 'light', label: 'Yorug‘' }]} />
         <p className="mt-3 text-[12.5px] text-muted">Tezkor tugmalar: <b>Ctrl K</b> qidirish, <b>N</b> yangi video, <b>Esc</b> yopish.</p>
+        {mode === 'server' && ls.get('kz-token') && <Button className="mt-3" onClick={() => { logout(); location.reload(); }}><LogOut size={16} />Paneldan chiqish</Button>}
       </Card>
       <Card>
         <CardHead title="Ma’lumotlar" sub={mode === 'server' ? 'serverda: data/zavod.db (SQLite)' : 'brauzer xotirasida (demo)'} />

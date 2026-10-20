@@ -13,11 +13,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(ROOT, process.env.DATA_DIR ?? 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const client = createClient({ url: process.env.DATABASE_URL ?? `file:${path.join(DATA_DIR, 'zavod.db')}` });
+// Standart: DATA_DIR ichidagi SQLite fayl. DATABASE_URL=libsql://… (Turso) bersangiz masofaviy baza ishlatiladi.
+const URL = process.env.DATABASE_URL || `file:${path.join(DATA_DIR, 'zavod.db')}`;
+const client = createClient({ url: URL, authToken: process.env.DATABASE_AUTH_TOKEN || undefined });
 export const db = drizzle(client, { schema });
 
 export async function initDb() {
-  await client.execute('PRAGMA journal_mode = WAL');
+  if (URL.startsWith('file:')) await client.execute('PRAGMA journal_mode = WAL');
   await client.execute('PRAGMA foreign_keys = ON');
   await migrate(db, { migrationsFolder: path.join(ROOT, 'drizzle') });
 }

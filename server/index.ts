@@ -16,6 +16,10 @@ const DIST = path.join(ROOT, 'dist');
 const argPort = process.argv.indexOf('--port');
 const PORT = Number(argPort > 0 ? process.argv[argPort + 1] : process.env.PORT) || 4310;
 const TOKEN = process.env.ADMIN_TOKEN ?? '';
+if (process.env.NODE_ENV === 'production' && TOKEN.length < 16) {
+  console.error('Production rejimida ADMIN_TOKEN kamida 16 belgi bo‘lishi shart.');
+  process.exit(1);
+}
 
 await initDb();
 let state: State = (await loadState()) ?? seed(Date.now());
@@ -42,8 +46,9 @@ setInterval(() => void serial(async () => { tick(state, Date.now()); await saveS
 const ACTIONS = new Set<Action['type']>(['video.create', 'video.update', 'video.move', 'video.check', 'video.delete', 'post.schedule', 'post.reschedule', 'post.remove', 'post.retry', 'post.publishNow', 'post.published', 'post.failed', 'post.stats', 'platform.update', 'goals.update', 'workspace.update']);
 
 const api = new Hono()
+  // ADMIN_TOKEN o'rnatilgan bo'lsa butun API (o'qish ham) token so'raydi; /health ochiq qoladi (hosting tekshiruvi uchun).
   .use('*', async (c, next) => {
-    if (!TOKEN || c.req.method === 'GET') return next();
+    if (!TOKEN || c.req.path.endsWith('/health')) return next();
     return bearerAuth({ token: TOKEN, invalidTokenMessage: { error: 'Token noto‘g‘ri' }, noAuthenticationHeaderMessage: { error: 'Token kerak (Authorization: Bearer …)' } })(c, next);
   })
   // --- panel uchun ---
@@ -63,13 +68,14 @@ const api = new Hono()
   })
   .get('/export.csv', (c) => c.body('﻿' + toCSV(state, Date.now()), 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="kontent-zavod.csv"' }))
   // --- avtomatlashtirish (worker, n8n, render skriptlari) uchun ---
-  .get('/queue', (c) => c.json(nextQueue(state, Date.now())))
-  .get('/queue/next', (c) => c.json(nextQueue(state, Date.now()).find((x) => x.ready) ?? null))
+  // Avval tick: simulyatsiya yoqilgan bo'lsa vaqti kelgan postlarni server o'zi yopadi va worker ularni haqiqiy platformaga yubormaydi.
+  .get('/queue', (c) => { tick(state, Date.now()); return c.json(nextQueue(state, Date.now())); })
+  .get('/queue/next', (c) => { tick(state, Date.now()); return c.json(nextQueue(state, Date.now()).find((x) => x.ready) ?? null); })
   .post('/posts/:id/published', async (c) => c.json({ ok: true, result: await act({ type: 'post.published', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
   .post('/posts/:id/failed', async (c) => c.json({ ok: true, result: await act({ type: 'post.failed', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
   .post('/posts/:id/stats', async (c) => c.json({ ok: true, result: await act({ type: 'post.stats', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
   .post('/videos', async (c) => c.json(await act({ type: 'video.create', payload: await c.req.json() }), 201))
-  .get('/health', (c) => c.json({ ok: true, videos: state.videos.length, updatedAt: state.updatedAt }));
+  .get('/health', (c) => c.json({ ok: true, auth: !!TOKEN }));
 
 const app = new Hono();
 app.use('/api/*', logger());
@@ -92,6 +98,11 @@ serve({ fetch: app.fetch, port: PORT }, () => {
   if (fs.existsSync(DIST)) console.log(`Panel: http://localhost:${PORT}`);
   else console.log('Panel uchun: npm run dev (Vite, http://localhost:5173) yoki npm run build');
   if (!TOKEN) console.log('Diqqat: ADMIN_TOKEN o‘rnatilmagan — faqat mahalliy foydalanish uchun.');
+  // WORKER=1: joylash workeri shu jarayonda ishlaydi (hostingda alohida xizmat kerak bo'lmaydi).
+  if (process.env.WORKER === '1') {
+    process.env.PANEL_URL ||= `http://127.0.0.1:${PORT}`;
+    import('../tools/worker').catch((e: Error) => console.error('Worker ishga tushmadi:', e.message));
+  }
 });
 
 export type ApiType = typeof api;
