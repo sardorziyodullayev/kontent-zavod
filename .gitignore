@@ -8,3 +8,4 @@ media/
 .claude/
 .env.*
 !.env.example
+client_secret*.json

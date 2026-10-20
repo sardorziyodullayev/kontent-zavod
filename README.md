@@ -122,7 +122,19 @@ Ishonch darajasi: 20+ o'xshash post bo'lsa *yuqori*, 8+ bo'lsa *o'rta*, undan ka
 1. **Simulyatsiya** (standart). Server vaqti kelgan tayyor postlarni o'zi "joylangan" deb belgilaydi va statistikani modeldan hisoblaydi. Panelni sinab ko'rish uchun.
 2. **Worker rejimi.** *Konveyer va API* sahifasida simulyatsiyani o'chiring va `npm run worker` ni ishga tushiring.
 
-Worker har daqiqada `/api/queue` ni o'qiydi, vaqti kelgan postni platformaga yuklaydi va natijani panelga yuboradi. Video fayllar `media/<videoId>.mp4` dan olinadi. Telegram adapteri tayyor (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL`). YouTube, Instagram, TikTok va Facebook adapterlarining skeleti [tools/worker.ts](tools/worker.ts) ichida.
+### YouTube'ni ulash
+
+1. [Google Cloud Console](https://console.cloud.google.com/) da loyiha yarating va **YouTube Data API v3** ni yoqing.
+2. *Google Auth Platform → Audience*: turi **External**, holati **In production** (Testing holatida token 7 kunda eskiradi). "Tasdiqlanmagan ilova" ogohlantirishida *Advanced → davom etish* ni bosasiz, bu o'zingiz uchun yetarli.
+3. *Clients → Create client → Desktop app*, JSON faylini yuklab, loyiha papkasiga `client_secret_….json` nomi bilan qo'ying (GitHub'ga yuklanmaydi).
+4. `npm run youtube:auth`: brauzer ochiladi, kanalni tanlab ruxsat berasiz, kalitlar `.env` ga yoziladi.
+5. Serverga: `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` ni Railway o'zgaruvchilariga qo'shing.
+
+Worker har 30 daqiqada kanal obunachilarini va joylangan YouTube videolarining ko'rish, layk, izohlarini oladi (qo'lda joylab, *Joyladim* tugmasi bilan havolasini kiritgan videolar ham). Yuklash uchun video kartasidagi **Video fayl** bo'limidan MP4 yuklang.
+
+**Cheklov:** audit qilinmagan API loyihasi yuklagan videolarni YouTube **yopiq (private)** qoldiradi. Ochiq joylash uchun Google'ning [YouTube API audit](https://support.google.com/youtube/contact/yt_api_form) formasini to'ldiring. Statistika o'qish auditsiz ishlaydi.
+
+Worker har daqiqada `/api/queue` ni o'qiydi, vaqti kelgan postni platformaga yuklaydi va natijani panelga yuboradi. Video fayllar `media/<videoId>.mp4` dan olinadi. Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL`) va YouTube adapterlari tayyor. Instagram, TikTok va Facebook adapterlarining skeleti [tools/worker.ts](tools/worker.ts) ichida.
 
 | Metod | Yo'l | Vazifasi |
 |---|---|---|

@@ -212,7 +212,7 @@ export function nextQueue(state: State, now: number): QueueItem[] {
     .sort((a, b) => a.p.scheduledAt - b.p.scheduledAt)
     .map(({ v, p }) => ({
       postId: p.id, videoId: v.id, title: v.title, platform: p.platform, scheduledAt: p.scheduledAt, ready: readiness(v) >= 1, readiness: readiness(v),
-      caption: [v.script.description, v.script.hashtags].filter(Boolean).join('\n\n'), dueIn: p.scheduledAt - now,
+      caption: [v.script.description, v.script.hashtags].filter(Boolean).join('\n\n'), hashtags: v.script.hashtags, format: v.format, dueIn: p.scheduledAt - now,
     }));
 }
 

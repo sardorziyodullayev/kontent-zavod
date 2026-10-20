@@ -150,5 +150,7 @@ export interface QueueItem {
   ready: boolean;
   readiness: number;
   caption: string;
+  hashtags: string;
+  format: Format;
   dueIn: number;
 }

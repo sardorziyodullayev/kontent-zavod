@@ -114,3 +114,41 @@ export function useNow(ms = 60_000) {
   }, [ms]);
   return now;
 }
+
+// ---------- video fayllar (faqat server rejimida) ----------
+export interface MediaInfo { videoId: string; name: string; size: number; uploadedAt: number }
+
+export function useMedia(enabled: boolean) {
+  return useQuery({
+    queryKey: ['media'], enabled, refetchInterval: 60_000,
+    queryFn: async (): Promise<MediaInfo[]> => {
+      const r = await fetch(`${API}/media`, { headers: authHeader(), cache: 'no-store' });
+      if (!r.ok) throw new Error('Fayllar ro‘yxati olinmadi');
+      return r.json();
+    },
+  });
+}
+
+/** Faylni serverga yuklaydi; onProgress 0..1. XHR — fetch yuklash foizini bermaydi. */
+export function uploadMedia(videoId: string, file: File, onProgress: (p: number) => void) {
+  return new Promise<MediaInfo>((ok, fail) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', `${API}/media/${videoId}`);
+    for (const [k, v] of Object.entries(authHeader())) x.setRequestHeader(k, v);
+    x.setRequestHeader('Content-Type', file.type || 'video/mp4');
+    x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    x.onload = () => {
+      let j: { error?: string } & Partial<MediaInfo> = {};
+      try { j = JSON.parse(x.responseText); } catch { /* bo'sh javob */ }
+      if (x.status >= 200 && x.status < 300) ok(j as MediaInfo);
+      else fail(new Error(j.error ?? `Yuklanmadi (${x.status})`));
+    };
+    x.onerror = () => fail(new Error('Tarmoq xatosi'));
+    x.send(file);
+  });
+}
+
+export async function deleteMedia(videoId: string) {
+  const r = await fetch(`${API}/media/${videoId}`, { method: 'DELETE', headers: authHeader() });
+  if (!r.ok) throw new Error('O‘chirilmadi');
+}

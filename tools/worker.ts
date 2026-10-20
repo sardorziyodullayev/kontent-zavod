@@ -3,7 +3,8 @@
 // Haqiqiy joylash uchun panelda "Simulyatsiya" o'chirilgan bo'lsin (Konveyer va API sahifasi).
 import fs from 'node:fs';
 import path from 'node:path';
-import type { PlatformId, QueueItem } from '../src/core/types';
+import type { PlatformId, QueueItem, State } from '../src/core/types';
+import { channel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 
 const API = process.env.PANEL_URL ?? 'http://localhost:4310';
 const TOKEN = process.env.ADMIN_TOKEN ?? '';
@@ -46,9 +47,11 @@ const adapters: Record<PlatformId, Adapter> = {
     if (!res.ok) throw new Error(`Telegram: ${res.description}`);
     return { url: `https://t.me/${process.env.TELEGRAM_CHANNEL!.replace('@', '')}/${res.result.message_id}` };
   },
-  async youtube() {
+  async youtube(job, file) {
     need('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN');
-    throw new Error('YouTube yuklash hali yozilmagan: videos.insert (resumable upload)');
+    if (!file) throw new Error('Video fayl yuklanmagan (video kartasi → Video fayl)');
+    const description = job.caption.replace(job.hashtags, '').trim();
+    return { url: await uploadVideo(file, { title: job.title, description, hashtags: job.hashtags, short: job.format === 'short' }) };
   },
   async instagram() {
     need('IG_USER_ID', 'IG_ACCESS_TOKEN');
@@ -80,8 +83,30 @@ async function syncTelegram() {
   tgSentAt = Date.now();
 }
 
+/** YouTube: kanal obunachilari va joylangan videolar statistikasi, har 30 daqiqada (kvota: ~2 birlik). */
+let ytSyncedAt = 0;
+async function syncYoutube() {
+  if (!youtubeConfigured() || Date.now() - ytSyncedAt < 30 * 60_000) return;
+  ytSyncedAt = Date.now();
+  const { state } = await api<{ state: State }>('/api/state');
+  const ch = await channel();
+  const pl = state.platforms.find((p) => p.id === 'youtube');
+  await api('/api/action', { type: 'platform.update', payload: { id: 'youtube', patch: { followers: ch.subscribers, ...(pl?.connected ? {} : { connected: true }), ...(pl?.handle ? {} : { handle: ch.handle }) } } });
+  const posts = state.videos.flatMap((v) => v.posts).filter((p) => p.platform === 'youtube' && p.status === 'published' && p.url && videoIdOf(p.url));
+  if (!posts.length) return;
+  const stats = await videoStats(posts.map((p) => videoIdOf(p.url!)!));
+  for (const p of posts) {
+    const s = stats.get(videoIdOf(p.url!)!);
+    const last = p.snapshots.at(-1);
+    if (!s || (last && last.views === s.views && last.likes === s.likes && last.comments === s.comments)) continue;
+    await api(`/api/posts/${p.id}/stats`, { stats: s });
+  }
+  console.log(`YouTube: ${ch.subscribers} obunachi, ${posts.length} ta video statistikasi yangilandi`);
+}
+
 async function runOnce() {
   await syncTelegram().catch((e: Error) => console.error(e.message));
+  await syncYoutube().catch((e: Error) => console.error(e.message));
   const queue = await api<QueueItem[]>('/api/queue');
   const due = queue.filter((j) => j.dueIn <= 0 && (!ONLY || j.postId === ONLY));
   if (!due.length) return console.log(new Date().toISOString(), `navbatda ${queue.length} ta, vaqti kelgani yo‘q`);

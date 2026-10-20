@@ -123,6 +123,11 @@ export function applyAction(state: State, action: Action, now = Date.now()): unk
       const { v, p } = P(action.payload.postId);
       p.scheduledAt = now - 1000;
       CHECKLIST.forEach((c) => (v.checklist[c.id] = true));
+      // haqiqiy rejim: vaqti hozirga suriladi, worker bir daqiqa ichida haqiqiy platformaga yuboradi
+      if (!state.workspace.autoPublish) {
+        log(state, now, 'publish', `“${v.title}” ${pname(p.platform)} uchun hozir joylash navbatiga qo‘yildi`);
+        return p;
+      }
       const prev = state.workspace.autoPublish;
       state.workspace.autoPublish = true; // qo'lda "hozir joylash" simulyatsiyadan qat'i nazar ishlaydi
       tick(state, now);

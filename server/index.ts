@@ -10,6 +10,7 @@ import { HTTPException } from 'hono/http-exception';
 import { logger } from 'hono/logger';
 import { ActionError, applyAction, emptyState, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
 import { initDb, loadState, saveState } from './db';
+import { media } from './media';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -85,6 +86,7 @@ const api = new Hono()
   .post('/posts/:id/failed', async (c) => c.json({ ok: true, result: await act({ type: 'post.failed', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
   .post('/posts/:id/stats', async (c) => c.json({ ok: true, result: await act({ type: 'post.stats', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
   .post('/videos', async (c) => c.json(await act({ type: 'video.create', payload: await c.req.json() }), 201))
+  .route('/media', media)
   .get('/health', (c) => c.json({ ok: true, auth: !!TOKEN }));
 
 const app = new Hono();

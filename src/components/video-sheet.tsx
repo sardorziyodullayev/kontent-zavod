@@ -1,11 +1,12 @@
 // Video kartasi: natija, joylashlar (rejalashtirish + prognoz), tayyorlik, ssenariy, izohlar.
-import { Check, ExternalLink, Play, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { Check, ExternalLink, FileVideo, Link2, Play, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CHECKLIST, DAY, FORMATS, HOUR, OWNERS, PLATFORMS, SCRIPT_TEMPLATES, STAGES, TOPICS, at, fmtDate, fmtDur, fmtFull, fmtNum, fmtTime, forecast, forecastPost,
   fromInputs, pct, pname, postStats, readiness, relDay, toInputs, videoStats, type Action, type PlatformId, type State, type Video,
 } from '@/core';
-import { useAct, useNow } from '@/lib/data';
+import { useQueryClient } from '@tanstack/react-query';
+import { deleteMedia, uploadMedia, useAct, useAppData, useMedia, useNow } from '@/lib/data';
 import { setUI, useUI } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { MiniStat, Pf, PostTag, pcolor } from './bits';
@@ -142,6 +143,10 @@ function Body({ v, state, section }: { v: Video; state: State; section?: string 
               <div className="flex flex-wrap justify-end gap-1.5">
                 {p.status === 'scheduled' && <>
                   <Button size="sm" onClick={() => confirm('Hozir joylansinmi? Tayyorlik ro‘yxati to‘liq belgilanadi.') && act.mutate({ type: 'post.publishNow', payload: { postId: p.id } })}><Play size={14} />Hozir</Button>
+                  <Button size="sm" title="O‘zingiz joyladingizmi? Havolasini kiriting" onClick={() => {
+                    const url = prompt(`${pname(p.platform)}dagi post havolasi:`)?.trim();
+                    if (url) act.mutate({ type: 'post.published', payload: { postId: p.id, url, publishedAt: Date.now() } });
+                  }}><Link2 size={14} />Joyladim</Button>
                   <Button size="icon-sm" variant="danger" aria-label="Rejadan olib tashlash" onClick={() => confirm('Rejadan olib tashlansinmi?') && act.mutate({ type: 'post.remove', payload: { postId: p.id } })}><Trash2 size={14} /></Button>
                 </>}
                 {(p.status === 'failed' || p.status === 'missed') && <>
@@ -156,6 +161,8 @@ function Body({ v, state, section }: { v: Video; state: State; section?: string 
         {!v.posts.length && <p className="text-muted">Hali rejalashtirilmagan</p>}
         <AddPost v={v} state={state} now={now} />
       </Sec>
+
+      <MediaSec v={v} />
 
       <Sec id="sec-ready" title="Tayyorlik" right={<b className="text-ink-2">{Math.round(r * 100)}%</b>}>
         <section ref={readyRef}>
@@ -196,6 +203,40 @@ function Body({ v, state, section }: { v: Video; state: State; section?: string 
         <Button size="sm" variant="danger" onClick={() => { if (confirm('Video butunlay o‘chirilsinmi? Buni qaytarib bo‘lmaydi.')) { setUI({ drawer: null }); act.mutate({ type: 'video.delete', payload: { id: v.id } }); } }}><Trash2 size={14} />Videoni o‘chirish</Button>
       </section>
     </>
+  );
+}
+
+function MediaSec({ v }: { v: Video }) {
+  const server = useAppData().data?.mode === 'server';
+  const qc = useQueryClient();
+  const { data: files } = useMedia(server);
+  const [progress, setProgress] = useState<number | null>(null);
+  if (!server) return null;
+  const file = files?.find((f) => f.videoId === v.id);
+  const pick = async (f?: File) => {
+    if (!f) return;
+    setProgress(0);
+    try { await uploadMedia(v.id, f, setProgress); await qc.invalidateQueries({ queryKey: ['media'] }); }
+    catch (e) { alert((e as Error).message); }
+    finally { setProgress(null); }
+  };
+  return (
+    <Sec title="Video fayl">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <FileVideo size={18} className="text-muted" />
+        <div className="min-w-0 flex-1 text-[13px]">
+          {progress != null ? <>Yuklanmoqda… <b className="tnum">{Math.round(progress * 100)}%</b></>
+            : file ? <><b>{file.name}</b> <span className="text-muted">· {(file.size / 1048576).toFixed(1)} MB · {fmtDate(file.uploadedAt)}, {fmtTime(file.uploadedAt)}</span></>
+            : <span className="text-muted">Fayl yo‘q. YouTube uchun shart, Telegram'da fayl bo‘lmasa matn joylanadi.</span>}
+        </div>
+        <label className={cn(buttonClass('default', 'sm'), progress != null && 'pointer-events-none opacity-45')}>
+          <Upload size={14} />{file ? 'Almashtirish' : 'MP4 yuklash'}
+          <input type="file" accept="video/mp4,video/quicktime" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+        </label>
+        {file && progress == null && <Button size="icon-sm" variant="danger" aria-label="Faylni o‘chirish" onClick={async () => { if (confirm('Fayl serverdan o‘chirilsinmi?')) { await deleteMedia(v.id); await qc.invalidateQueries({ queryKey: ['media'] }); } }}><Trash2 size={14} /></Button>}
+      </div>
+      {progress != null && <Meter className="mt-2.5" value={progress} />}
+    </Sec>
   );
 }
 
