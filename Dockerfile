@@ -22,8 +22,8 @@ COPY server ./server
 COPY src/core ./src/core
 COPY tools ./tools
 COPY drizzle ./drizzle
+# VOLUME yozilmagan: Railway uni taqiqlaydi, diskni hosting o'zi ulaydi.
 RUN mkdir -p /data/media
-VOLUME /data
 EXPOSE 4310
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"

@@ -6,3 +6,5 @@ media/
 *.log
 .DS_Store
 .claude/
+.env.*
+!.env.example
