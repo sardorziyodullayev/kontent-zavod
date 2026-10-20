@@ -9,3 +9,4 @@ media/
 .env.*
 !.env.example
 client_secret*.json
+brand/*.html
