@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "concurrently -n api,web -c yellow,green \"npm:dev:api\" \"vite\"",
-    "dev:api": "node --watch --import tsx --env-file-if-exists=.env server/index.ts --port 4310",
+    "dev:api": "node --watch-path=server --watch-path=src/core --import tsx --env-file-if-exists=.env server/index.ts --port 4310",
     "build": "tsc && vite build",
     "start": "tsx --env-file-if-exists=.env server/index.ts",
     "worker": "tsx --env-file-if-exists=.env tools/worker.ts",

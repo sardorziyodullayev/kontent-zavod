@@ -10,6 +10,8 @@ const TOKEN = process.env.ADMIN_TOKEN ?? '';
 const MEDIA_DIR = process.env.MEDIA_DIR ?? './media'; // <videoId>.mp4 fayllari
 const INTERVAL = Number(process.env.WORKER_INTERVAL ?? 60) * 1000;
 const ONCE = process.argv.includes('--once');
+// --only p123: faqat shu postni joylash (sinov uchun)
+const ONLY = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
 
 const headers = { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}) };
 async function api<T>(p: string, body?: unknown): Promise<T> {
@@ -64,7 +66,7 @@ const adapters: Record<PlatformId, Adapter> = {
 
 async function runOnce() {
   const queue = await api<QueueItem[]>('/api/queue');
-  const due = queue.filter((j) => j.dueIn <= 0);
+  const due = queue.filter((j) => j.dueIn <= 0 && (!ONLY || j.postId === ONLY));
   if (!due.length) return console.log(new Date().toISOString(), `navbatda ${queue.length} ta, vaqti kelgani yo‘q`);
   for (const job of due) {
     if (!job.ready) {
