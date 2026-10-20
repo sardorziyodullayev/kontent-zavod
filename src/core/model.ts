@@ -185,17 +185,14 @@ export function seed(now = Date.now()): State {
   return tick(state, now);
 }
 
-/** Haqiqiy ish uchun toza holat: namunaviy video va soxta obunachilarsiz, simulyatsiya o'chirilgan.
- *  `from` berilsa uning nomi, maqsadlari, id hisoblagichi va platforma nomlari saqlanadi, `keep` videolari o'tkaziladi. */
+/** Haqiqiy ish uchun toza holat: namunaviy video, soxta obunachi va maqsadlarsiz, simulyatsiya o'chirilgan.
+ *  `from` berilsa uning nomi va id hisoblagichi saqlanadi (eski id'lar takrorlanmasin), `keep` videolari o'tkaziladi. */
 export function emptyState(now = Date.now(), from?: State, keep: Video[] = []): State {
-  const platforms: Platform[] = PLATFORMS.map(({ id }) => {
-    const old = from?.platforms.find((p) => p.id === id);
-    return { id, handle: old?.handle ?? '', base: 0, connected: false, tokenExpiresAt: null, organicPerDay: 0, since: now, manualDelta: 0 };
-  });
+  const platforms: Platform[] = PLATFORMS.map(({ id }) => ({ id, handle: '', base: 0, connected: false, tokenExpiresAt: null, organicPerDay: 0, since: now, manualDelta: 0 }));
   const state: State = {
     version: 1, seededAt: now, nextId: from?.nextId ?? { v: 1, p: 1 },
     workspace: { name: from?.workspace.name ?? 'Kontent Zavod', timezone: 'Asia/Tashkent', autoPublish: false },
-    goals: from?.goals ?? { monthlySubs: 1000, monthlyViews: 100000, weeklyVideos: 3 },
+    goals: { monthlySubs: 1000, monthlyViews: 100000, weeklyVideos: 3 },
     platforms, videos: structuredClone(keep), activity: [],
   };
   log(state, now, 'milestone', 'Panel haqiqiy ishga tayyorlandi: namunaviy ma’lumotlar tozalandi');
