@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { PlatformId, QueueItem, State } from '../src/core/types';
 import { channel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
+import { buildDigest } from '../src/core/digest';
+import { dayStart, localHour } from '../src/core/format';
 
 const API = process.env.PANEL_URL ?? 'http://localhost:4310';
 const TOKEN = process.env.ADMIN_TOKEN ?? '';
@@ -104,9 +106,53 @@ async function syncYoutube() {
   console.log(`YouTube: ${ch.subscribers} obunachi, ${posts.length} ta video statistikasi yangilandi`);
 }
 
+/** Bot egasiga (TELEGRAM_OWNER_ID) ertalabki hisobot: har kuni DIGEST_HOUR da (Toshkent), bir marta.
+ *  Yuborilgan kun DATA_DIR/digest-sent.txt ga yoziladi — server qayta ishga tushsa takror yubormaydi. */
+const DIGEST_HOUR = Number(process.env.DIGEST_HOUR ?? 8);
+const DIGEST_FILE = path.join(process.env.DATA_DIR ?? './data', 'digest-sent.txt');
+async function tg<T>(method: string, body: unknown): Promise<T> {
+  const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = (await r.json()) as { ok: boolean; result: T; description?: string };
+  if (!j.ok) throw new Error(`Telegram ${method}: ${j.description}`);
+  return j.result;
+}
+async function sendDigest(chatId: string | number) {
+  const { state } = await api<{ state: State }>('/api/state');
+  await tg('sendMessage', { chat_id: chatId, text: buildDigest(state, Date.now()), parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+}
+async function dailyDigest() {
+  const owner = process.env.TELEGRAM_OWNER_ID;
+  if (!owner || !process.env.TELEGRAM_BOT_TOKEN) return;
+  const now = Date.now(), h = localHour(now), day = String(dayStart(now));
+  if (h < DIGEST_HOUR || h >= DIGEST_HOUR + 3) return; // server ertalab o'chiq bo'lsa, kechqurun eski hisobot yubormaydi
+  if (fs.existsSync(DIGEST_FILE) && fs.readFileSync(DIGEST_FILE, 'utf8').trim() === day) return;
+  await sendDigest(owner);
+  fs.mkdirSync(path.dirname(DIGEST_FILE), { recursive: true });
+  fs.writeFileSync(DIGEST_FILE, day);
+  console.log('Ertalabki hisobot yuborildi');
+}
+
+/** Bot buyruqlari (getUpdates): /start — chat ID ni aytadi, /hisobot — egasiga hozirgi hisobot. */
+let updateOffset = 0;
+async function pollBot() {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return;
+  const updates = await tg<{ update_id: number; message?: { chat: { id: number; type: string }; text?: string } }[]>('getUpdates', { offset: updateOffset, timeout: 0, allowed_updates: ['message'] });
+  for (const u of updates) {
+    updateOffset = u.update_id + 1;
+    const m = u.message;
+    if (!m?.text || m.chat.type !== 'private') continue;
+    const owner = String(m.chat.id) === process.env.TELEGRAM_OWNER_ID;
+    const cmd = m.text.trim().split(/[\s@]/)[0];
+    if (owner && (cmd === '/hisobot' || cmd === '/start')) await sendDigest(m.chat.id);
+    else if (cmd === '/start') await tg('sendMessage', { chat_id: m.chat.id, text: `Salom! Sizning chat ID: ${m.chat.id}` });
+  }
+}
+
 async function runOnce() {
   await syncTelegram().catch((e: Error) => console.error(e.message));
   await syncYoutube().catch((e: Error) => console.error(e.message));
+  await pollBot().catch((e: Error) => console.error(e.message));
+  await dailyDigest().catch((e: Error) => console.error(e.message));
   const queue = await api<QueueItem[]>('/api/queue');
   const due = queue.filter((j) => j.dueIn <= 0 && (!ONLY || j.postId === ONLY));
   if (!due.length) return console.log(new Date().toISOString(), `navbatda ${queue.length} ta, vaqti kelgani yo‘q`);

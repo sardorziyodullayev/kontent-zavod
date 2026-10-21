@@ -4,3 +4,4 @@ export * from './format';
 export * from './model';
 export * from './analytics';
 export * from './actions';
+export * from './digest';

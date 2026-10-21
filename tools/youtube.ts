@@ -27,14 +27,15 @@ async function yt<T>(url: string, init: RequestInit = {}): Promise<T> {
   return j as T;
 }
 
-export interface UploadMeta { title: string; description: string; hashtags: string; short: boolean }
+export interface UploadMeta { title: string; description: string; hashtags: string; short: boolean; tags?: string[]; publishAt?: number }
 
 /** Faylni YouTube'ga yuklaydi va video havolasini qaytaradi. */
 export async function uploadVideo(file: string, m: UploadMeta) {
-  const tags = m.hashtags.split(/\s+/).map((t) => t.replace(/^#/, '')).filter(Boolean).slice(0, 15);
+  const tags = m.tags ?? m.hashtags.split(/\s+/).map((t) => t.replace(/^#/, '')).filter(Boolean).slice(0, 15);
   const meta = {
     snippet: { title: m.title.slice(0, 100), description: [m.description, m.hashtags].filter(Boolean).join('\n\n').slice(0, 5000), tags, categoryId: process.env.YOUTUBE_CATEGORY ?? '22' },
-    status: { privacyStatus: process.env.YOUTUBE_PRIVACY ?? 'public', selfDeclaredMadeForKids: false },
+    // publishAt: video yopiq yuklanadi va YouTube uni shu vaqtda o'zi ochadi. Ovoz AI bilan — "altered or synthetic content" belgisi.
+    status: { privacyStatus: m.publishAt ? 'private' : process.env.YOUTUBE_PRIVACY ?? 'public', ...(m.publishAt ? { publishAt: new Date(m.publishAt).toISOString() } : {}), selfDeclaredMadeForKids: false, containsSyntheticMedia: true },
   };
   const size = fs.statSync(file).size;
   const type = path.extname(file) === '.mov' ? 'video/quicktime' : 'video/mp4';
@@ -53,7 +54,7 @@ export async function uploadVideo(file: string, m: UploadMeta) {
   } as RequestInit);
   const v: { id?: string; status?: { privacyStatus?: string }; error?: { message?: string } } = await put.json();
   if (!put.ok || !v.id) throw new Error(`YouTube yuklash: ${v.error?.message ?? put.status}`);
-  if (v.status?.privacyStatus === 'private' && meta.status.privacyStatus !== 'private') console.warn('YouTube videoni yopiq (private) qoldirdi: API loyihasi audit qilinmagan');
+  if (v.status?.privacyStatus === 'private' && meta.status.privacyStatus !== 'private' && !m.publishAt) console.warn('YouTube videoni yopiq (private) qoldirdi: API loyihasi audit qilinmagan');
   return m.short ? `https://youtube.com/shorts/${v.id}` : `https://youtu.be/${v.id}`;
 }
 
