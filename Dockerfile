@@ -23,6 +23,8 @@ COPY server ./server
 COPY src/core ./src/core
 COPY tools ./tools
 COPY drizzle ./drizzle
+# bot sovg'asi: "Biznes uchun 30 ta tayyor ChatGPT so'rovi" (manba: brand/gift/30-sorov.html)
+COPY brand/30-sorov.pdf ./brand/30-sorov.pdf
 # VOLUME yozilmagan: Railway uni taqiqlaydi, diskni hosting o'zi ulaydi.
 RUN mkdir -p /data/media
 EXPOSE 4310

@@ -6,7 +6,8 @@ import path from 'node:path';
 import type { PlatformId, QueueItem, State } from '../src/core/types';
 import { channel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 import { buildDigest } from '../src/core/digest';
-import { dayStart, localHour } from '../src/core/format';
+import { dayStart, fmtDate, fmtTime, localHour } from '../src/core/format';
+import { GIFT_MISSING, LEAD_PROMPT, LEAD_THANKS, OWNER_HELP, PUBLIC_MENU, PUBLIC_WELCOME, SERVICES_TEXT, approvalText, awaitingApproval, leadText, nextFreeSlot, planText, statsText } from '../src/core/bot';
 
 const API = process.env.PANEL_URL ?? 'http://localhost:4310';
 const TOKEN = process.env.ADMIN_TOKEN ?? '';
@@ -132,20 +133,131 @@ async function dailyDigest() {
   console.log('Ertalabki hisobot yuborildi');
 }
 
-/** Bot buyruqlari (getUpdates): /start — chat ID ni aytadi, /hisobot — egasiga hozirgi hisobot. */
+// ---------- Telegram bot: egasi uchun boshqaruv, obunachilar uchun menyu va murojaatlar ----------
+// Holat DATA_DIR/bot-state.json da: qaysi video tasdiqqa yuborilgan, kim murojaat yozmoqda. Murojaatlar DATA_DIR/leads.jsonl ga ham yoziladi.
+const DATA_DIR = process.env.DATA_DIR ?? './data';
+const BOT_FILE = path.join(DATA_DIR, 'bot-state.json');
+const GIFT_FILE = process.env.GIFT_FILE ?? path.resolve('brand/30-sorov.pdf');
+type BotState = { asked: Record<string, true>; leadWait: number[] };
+const loadBot = (): BotState => { try { return { asked: {}, leadWait: [], ...JSON.parse(fs.readFileSync(BOT_FILE, 'utf8')) }; } catch { return { asked: {}, leadWait: [] }; } };
+const saveBot = (s: BotState) => { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(BOT_FILE, JSON.stringify(s)); };
+const html = (chat_id: number | string, text: string, extra: object = {}) => tg('sendMessage', { chat_id, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...extra });
+const mediaOf = (videoId: string) => ['.mp4', '.mov'].map((e) => path.join(MEDIA_DIR, videoId + e)).find((f) => fs.existsSync(f));
+async function sendFile(method: 'sendVideo' | 'sendDocument', chat_id: number | string, file: string, caption: string) {
+  const form = new FormData();
+  form.append('chat_id', String(chat_id));
+  form.append('caption', caption.slice(0, 1024));
+  form.append(method === 'sendVideo' ? 'video' : 'document', new Blob([fs.readFileSync(file)]), path.basename(file));
+  const res = await (await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', body: form })).json();
+  if (!res.ok) throw new Error(`Telegram ${method}: ${res.description}`);
+}
+
+/** Video/post qaysi platformalarga va soat nechaga: videoli — 20:00 (Telegram + ulangan bo'lsa YouTube), matnli — 13:00 (faqat Telegram). */
+function approvalPlan(state: State, videoId: string) {
+  const hasMedia = !!mediaOf(videoId);
+  const yt = state.platforms.find((p) => p.id === 'youtube')?.connected;
+  const platforms: PlatformId[] = hasMedia && yt ? ['telegram', 'youtube'] : ['telegram'];
+  return { platforms, slot: nextFreeSlot(state, Date.now(), 'telegram', hasMedia ? 20 : 13) };
+}
+
+/** Tayyor (faqat "Yakuniy tasdiq" qolgan) video yoki postni egasiga tugmalar bilan yuboradi — har biri bir marta. */
+async function askApprovals(force = false) {
+  const owner = process.env.TELEGRAM_OWNER_ID;
+  if (!owner || !process.env.TELEGRAM_BOT_TOKEN) return;
+  const bs = loadBot();
+  if (force) bs.asked = {};
+  const { state } = await api<{ state: State }>('/api/state');
+  for (const v of awaitingApproval(state)) {
+    if (bs.asked[v.id]) continue;
+    const { platforms, slot } = approvalPlan(state, v.id);
+    const file = mediaOf(v.id);
+    if (file) await sendFile('sendVideo', owner, file, v.title);
+    await html(owner, approvalText(v, slot, platforms), { reply_markup: { inline_keyboard: [[{ text: '✅ Tasdiqlash', callback_data: `ok:${v.id}` }, { text: '❌ Hozir emas', callback_data: `no:${v.id}` }]] } });
+    bs.asked[v.id] = true;
+    saveBot(bs);
+    console.log('Tasdiqqa yuborildi:', v.id, v.title);
+  }
+}
+
+async function approve(videoId: string) {
+  const { state } = await api<{ state: State }>('/api/state');
+  const v = awaitingApproval(state).find((x) => x.id === videoId);
+  if (!v) return 'Bu video allaqachon rejalashtirilgan yoki o‘zgargan — panelni tekshiring.';
+  const { platforms, slot } = approvalPlan(state, videoId);
+  await api('/api/action', { type: 'video.check', payload: { id: videoId, key: 'approved', value: true } });
+  for (const platform of platforms) await api('/api/action', { type: 'post.schedule', payload: { videoId, platform, scheduledAt: slot } });
+  return `✅ Rejalashtirildi: ${fmtDate(slot, { weekday: true })}, ${fmtTime(slot)} · ${platforms.join(' + ')}`;
+}
+
+type TgUser = { id: number; username?: string; first_name?: string; last_name?: string };
+type Update = {
+  update_id: number;
+  message?: { message_id: number; chat: { id: number; type: string }; from?: TgUser; text?: string };
+  callback_query?: { id: string; from: TgUser; data?: string; message?: { message_id: number; chat: { id: number }; text?: string } };
+};
+
 let updateOffset = 0;
 async function pollBot() {
   if (!process.env.TELEGRAM_BOT_TOKEN) return;
-  const updates = await tg<{ update_id: number; message?: { chat: { id: number; type: string }; text?: string } }[]>('getUpdates', { offset: updateOffset, timeout: 0, allowed_updates: ['message'] });
+  const OWNER = process.env.TELEGRAM_OWNER_ID;
+  const updates = await tg<Update[]>('getUpdates', { offset: updateOffset, timeout: 0, allowed_updates: ['message', 'callback_query'] });
   for (const u of updates) {
     updateOffset = u.update_id + 1;
-    const m = u.message;
-    if (!m?.text || m.chat.type !== 'private') continue;
-    const owner = String(m.chat.id) === process.env.TELEGRAM_OWNER_ID;
-    const cmd = m.text.trim().split(/[\s@]/)[0];
-    if (owner && (cmd === '/hisobot' || cmd === '/start')) await sendDigest(m.chat.id);
-    else if (cmd === '/start') await tg('sendMessage', { chat_id: m.chat.id, text: `Salom! Sizning chat ID: ${m.chat.id}` });
+    try {
+      if (u.callback_query) await onCallback(u.callback_query, OWNER);
+      else if (u.message) await onMessage(u.message, OWNER);
+    } catch (e) { console.error('bot:', (e as Error).message); }
   }
+}
+
+async function onCallback(q: NonNullable<Update['callback_query']>, OWNER?: string) {
+  const data = q.data ?? '', chat = q.message?.chat.id ?? q.from.id, isOwner = String(q.from.id) === OWNER;
+  await tg('answerCallbackQuery', { callback_query_id: q.id });
+  if (isOwner && (data.startsWith('ok:') || data.startsWith('no:'))) {
+    const result = data.startsWith('ok:') ? await approve(data.slice(3)) : '⏸ Keyinroq. Panelda tahrirlab, /tasdiq bilan qayta yuboring.';
+    if (q.message) await tg('editMessageReplyMarkup', { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
+    await html(chat, result);
+    return;
+  }
+  if (data === 'svc') await html(chat, SERVICES_TEXT, { reply_markup: { inline_keyboard: [[{ text: '✍️ Murojaat qoldirish', callback_data: 'lead' }]] } });
+  else if (data === 'gift') {
+    if (fs.existsSync(GIFT_FILE)) await sendFile('sendDocument', chat, GIFT_FILE, 'Biznes uchun 30 ta tayyor ChatGPT so‘rovi — PixelMind 🎁');
+    else await html(chat, GIFT_MISSING);
+  } else if (data === 'lead') {
+    const bs = loadBot();
+    if (!bs.leadWait.includes(chat)) bs.leadWait.push(chat);
+    saveBot(bs);
+    await html(chat, LEAD_PROMPT);
+  }
+}
+
+async function onMessage(m: NonNullable<Update['message']>, OWNER?: string) {
+  if (!m.text || m.chat.type !== 'private') return;
+  const isOwner = String(m.chat.id) === OWNER;
+  const cmd = m.text.trim().split(/[\s@]/)[0];
+  if (isOwner) {
+    if (cmd === '/hisobot' || cmd === '/start') await sendDigest(m.chat.id);
+    else if (cmd === '/reja' || cmd === '/statistika') {
+      const { state } = await api<{ state: State }>('/api/state');
+      await html(m.chat.id, cmd === '/reja' ? planText(state, Date.now()) : statsText(state, Date.now()));
+    } else if (cmd === '/tasdiq') await askApprovals(true);
+    else await html(m.chat.id, OWNER_HELP);
+    return;
+  }
+  // obunachi yoki mijoz
+  const bs = loadBot();
+  if (cmd === '/start' || cmd === '/menu') {
+    await html(m.chat.id, PUBLIC_WELCOME, { reply_markup: PUBLIC_MENU });
+    return;
+  }
+  // murojaat: tugmadan keyingi yoki istalgan erkin xabar egasiga yetkaziladi
+  const from = m.from ?? { id: m.chat.id };
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.appendFileSync(path.join(DATA_DIR, 'leads.jsonl'), JSON.stringify({ t: Date.now(), id: from.id, username: from.username ?? null, name: [from.first_name, from.last_name].filter(Boolean).join(' '), text: m.text }) + '\n');
+  if (OWNER) await html(OWNER, leadText(from, m.text));
+  bs.leadWait = bs.leadWait.filter((c) => c !== m.chat.id);
+  saveBot(bs);
+  await html(m.chat.id, LEAD_THANKS, { reply_markup: PUBLIC_MENU });
 }
 
 async function runOnce() {
@@ -153,6 +265,7 @@ async function runOnce() {
   await syncYoutube().catch((e: Error) => console.error(e.message));
   await pollBot().catch((e: Error) => console.error(e.message));
   await dailyDigest().catch((e: Error) => console.error(e.message));
+  await askApprovals().catch((e: Error) => console.error(e.message));
   const queue = await api<QueueItem[]>('/api/queue');
   const due = queue.filter((j) => j.dueIn <= 0 && (!ONLY || j.postId === ONLY));
   if (!due.length) return console.log(new Date().toISOString(), `navbatda ${queue.length} ta, vaqti kelgani yo‘q`);

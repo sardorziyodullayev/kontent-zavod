@@ -1,0 +1,62 @@
+=====================================================================
+4-VIDEO (UZ) — "Excel formulasini AI'ga yozdiring"
+Fayl: D:\motion\opus.5.5\films\pixelmind-04\out\pixelmind-04.mp4
+Panel: v125
+=====================================================================
+
+SARLAVHA:
+Excel formulasini ChatGPT yozsin — savdo hisobotini qo‘lda qilmang #Shorts
+
+TAVSIF:
+Har oy savdo jadvalini qo‘lda hisoblaysizmi? Formulani ChatGPT yozib beradi.
+
+1) Jadvalingizni tasvirlang: qaysi ustunda nima turadi va nimani hisoblash kerak.
+2) Formulani nusxalab, katakka qo‘ying va pastga torting.
+3) 2–3 qatorni qo‘lda tekshiring. Xato chiqsa — xatoni ChatGPT’ga yuboring.
+
+So‘rov (nusxalab oling):
+Jadvalimda B ustunda mahsulot nomi, C ustunda soni, D ustunda narxi. G2 katakdagi mahsulot bo‘yicha jami savdo summasini hisoblaydigan Excel formulasini yoz.
+
+Formula: =SUMPRODUCT((B2:B200=G2)*C2:C200*D2:D200)
+Excel ruscha bo‘lsa: =СУММПРОИЗВ((B2:B200=G2)*C2:C200*D2:D200)
+
+Telegram kanal: t.me/pixelminduz
+
+#Excel #ChatGPT #biznes #AI #PixelMind
+
+TEGLAR:
+Excel, Excel formula, ChatGPT, SUMPRODUCT, savdo hisoboti, biznes uchun AI, ChatGPT o'zbek tilida, PixelMind
+
+
+=====================================================================
+4-VIDEO (EN) — "Let ChatGPT write your Excel formula"
+File: D:\motion\opus.5.5\films\pixelmind-04-en\out\pixelmind-04-en.mp4
+=====================================================================
+
+TITLE:
+Stop adding up sales by hand — let ChatGPT write the Excel formula #Shorts
+
+DESCRIPTION:
+Still totaling your sales spreadsheet by hand? ChatGPT can write the formula.
+
+1) Describe your sheet: what's in each column and what you need to calculate.
+2) Copy the formula, paste it into a cell and drag it down.
+3) Double-check 2–3 rows by hand. Got an error? Send it back to ChatGPT.
+
+Prompt (copy it):
+My sheet has product names in column B, quantity in column C and price in column D. Write an Excel formula that totals sales for the product in cell G2.
+
+Formula: =SUMPRODUCT((B2:B200=G2)*C2:C200*D2:D200)
+
+#Excel #ChatGPT #smallbusiness #AI #PixelMind
+
+TAGS:
+Excel, Excel formulas, ChatGPT, SUMPRODUCT, sales report, small business, AI for business, PixelMind
+
+
+=====================================================================
+JOYLASH TAKLIFI (sizning ruxsatingizdan keyin)
+=====================================================================
+- Telegram + YouTube (UZ): 24-okt, 20:00 (3-video 23-okt da chiqsa)
+- YouTube (EN): 26-okt, 22:00
+- Altered or synthetic content: Yes
