@@ -2,6 +2,7 @@
 import type { State } from './types';
 import { DAY, STAGES, pname } from './constants';
 import { alerts } from './analytics';
+import { awaitingApproval } from './bot';
 import { allPosts, followersAt, postStats, readiness } from './model';
 import { dayStart, fmtDate, fmtNum, fmtTime } from './format';
 
@@ -41,7 +42,9 @@ export function buildDigest(state: State, now: number): string {
   if (counts.length) L.push(`🏭 <b>Zavod:</b> ${counts.map(([n, c]) => `${n} ${c}`).join(' · ')}`);
 
   // keyingi ishlanadigan: rejalashtirilmagan eng birinchi video (reja tartibida)
-  const next = state.videos.find((v) => ['idea', 'script', 'production', 'editing'].includes(v.status));
+  const waiting = awaitingApproval(state);
+  if (waiting.length) L.push(`⏸ <b>Tasdiq kutmoqda:</b> ${waiting.length} ta — /tasdiq`);
+  const next = state.videos.find((v) => ['idea', 'script', 'production', 'editing'].includes(v.status) && !waiting.includes(v));
   if (next) L.push(`▶️ <b>Navbatdagi ish:</b> ${esc(next.title)}${next.notes ? ` (${esc(next.notes.split('\n')[0])})` : ''}`);
 
   const al = alerts(state, now).slice(0, 4);
