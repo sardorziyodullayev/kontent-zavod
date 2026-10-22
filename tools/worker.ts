@@ -7,8 +7,8 @@ import type { PlatformId, QueueItem, State } from '../src/core/types';
 import { mirrorSoon } from '../server/files';
 import { channel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 import { buildDigest } from '../src/core/digest';
-import { dayStart, fmtDate, fmtTime, localHour } from '../src/core/format';
-import { GIFT_MISSING, LEAD_PROMPT, LEAD_THANKS, OWNER_HELP, PUBLIC_MENU, PUBLIC_WELCOME, SERVICES_TEXT, approvalText, awaitingApproval, leadText, nextFreeSlot, planText, statsText } from '../src/core/bot';
+import { dayStart, localHour } from '../src/core/format';
+import { GIFT_MISSING, LEAD_PROMPT, LEAD_THANKS, OWNER_HELP, PUBLIC_MENU, PUBLIC_WELCOME, SERVICES_TEXT, approvalText, approvedText, awaitingApproval, leadText, nextFreeSlot, planText, postponedText, statsText } from '../src/core/bot';
 
 const API = process.env.PANEL_URL ?? 'http://localhost:4310';
 const TOKEN = process.env.ADMIN_TOKEN ?? '';
@@ -184,11 +184,14 @@ async function askApprovals(force = false) {
 async function approve(videoId: string) {
   const { state } = await api<{ state: State }>('/api/state');
   const v = awaitingApproval(state).find((x) => x.id === videoId);
-  if (!v) return 'Bu video allaqachon rejalashtirilgan yoki o‘zgargan — panelni tekshiring.';
+  if (!v) {
+    const title = state.videos.find((x) => x.id === videoId)?.title ?? videoId;
+    return `ℹ️ «${title.replace(/[<>&]/g, '')}» allaqachon rejalashtirilgan yoki o‘zgargan — /reja yoki panelni tekshiring.`;
+  }
   const { platforms, slot } = approvalPlan(state, videoId);
   await api('/api/action', { type: 'video.check', payload: { id: videoId, key: 'approved', value: true } });
   for (const platform of platforms) await api('/api/action', { type: 'post.schedule', payload: { videoId, platform, scheduledAt: slot } });
-  return `✅ Rejalashtirildi: ${fmtDate(slot, { weekday: true })}, ${fmtTime(slot)} · ${platforms.join(' + ')}`;
+  return approvedText(v.title, slot, platforms);
 }
 
 type TgUser = { id: number; username?: string; first_name?: string; last_name?: string };
@@ -216,9 +219,11 @@ async function onCallback(q: NonNullable<Update['callback_query']>, OWNER?: stri
   const data = q.data ?? '', chat = q.message?.chat.id ?? q.from.id, isOwner = String(q.from.id) === OWNER;
   await tg('answerCallbackQuery', { callback_query_id: q.id });
   if (isOwner && (data.startsWith('ok:') || data.startsWith('no:'))) {
-    const result = data.startsWith('ok:') ? await approve(data.slice(3)) : '⏸ Keyinroq. Panelda tahrirlab, /tasdiq bilan qayta yuboring.';
+    const id = data.slice(3);
+    const result = data.startsWith('ok:') ? await approve(id) : postponedText((await api<{ state: State }>('/api/state')).state.videos.find((v) => v.id === id)?.title ?? id);
     if (q.message) await tg('editMessageReplyMarkup', { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
-    await html(chat, result);
+    // asl tasdiq xabariga reply: bir nechta video bo'lsa ham qaysi biri tasdiqlangani ko'rinib turadi
+    await html(chat, result, q.message ? { reply_parameters: { message_id: q.message.message_id, allow_sending_without_reply: true } } : {});
     return;
   }
   if (data === 'svc') await html(chat, SERVICES_TEXT, { reply_markup: { inline_keyboard: [[{ text: '✍️ Murojaat qoldirish', callback_data: 'lead' }]] } });

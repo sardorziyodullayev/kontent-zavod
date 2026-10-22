@@ -33,6 +33,10 @@ describe('telegram bot', () => {
     const s = C.emptyState(NOW);
     const v = ready(s, 'A < B & C');
     expect(C.approvalText(v, C.at(NOW, 20), ['telegram'])).toContain('A &lt; B &amp; C');
+    const ok = C.approvedText('A < B', C.at(NOW, 20), ['telegram', 'youtube']);
+    expect(ok).toContain('Tasdiqlandi:</b> A &lt; B');
+    expect(ok).toContain('20:00');
+    expect(C.postponedText('X & Y')).toContain('X &amp; Y');
     expect(C.planText(s, NOW)).toContain('Tasdiq kutmoqda: 1');
     expect(C.leadText({ id: 5, first_name: '<b>' }, 'x & y')).toContain('&lt;b&gt;');
     expect(C.statsText(s, NOW)).toContain('Statistika');

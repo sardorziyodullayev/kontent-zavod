@@ -6,6 +6,14 @@ import { at, dayStart, fmtDate, fmtNum, fmtTime } from './format';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/** Tasdiq tugmasidan keyin asl xabarga reply: qaysi video, qachon, qayerga. */
+export function approvedText(title: string, slot: number, platforms: PlatformId[]) {
+  return `✅ <b>Tasdiqlandi:</b> ${esc(title)}
+📅 ${fmtDate(slot, { weekday: true })}, ${fmtTime(slot)} · ${platforms.map(pname).join(' + ')}`;
+}
+export const postponedText = (title: string) => `⏸ <b>Keyinroq:</b> ${esc(title)}
+Panelda tahrirlab, /tasdiq bilan qayta yuboring.`;
+
 /** Egasining tasdig'ini kutayotgan video: "Yakuniy tasdiq"dan boshqa hamma bandi bajarilgan, hali rejalashtirilmagan. */
 export function awaitingApproval(state: State): Video[] {
   return state.videos.filter((v) => {
