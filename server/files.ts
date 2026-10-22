@@ -32,18 +32,35 @@ export async function unmirror(file: string) {
 /** Xato bo'lsa ham asosiy ishni to'xtatmaydi. */
 export const mirrorSoon = (file: string) => void mirror(file).catch((e: Error) => console.error('Bazaga nusxa:', file, e.message));
 
-/** Ishga tushishda: bazadagi, diskda yo'q fayllarni tiklaydi. */
+/** Tiklash holati /api/health da ko'rinadi (Render loglarisiz ham tekshirish uchun). */
+export const restoreStatus: { done: boolean; restored: number; failed: string[] } = { done: false, restored: 0, failed: [] };
+
+/** Ishga tushishda: bazadagi, diskda yo'q fayllarni tiklaydi. Bo'laklar birma-bir o'qiladi (xotira va javob hajmi kichik). */
 export async function restoreFiles() {
-  if (!REMOTE_DB) return;
-  const list = await db.selectDistinct({ path: files.path }).from(files);
-  let n = 0;
-  for (const { path: p } of list) {
+  if (!REMOTE_DB) return Object.assign(restoreStatus, { done: true });
+  const rows = await db.select({ path: files.path, idx: files.idx }).from(files);
+  const byPath = new Map<string, number>();
+  for (const r of rows) byPath.set(r.path, Math.max(byPath.get(r.path) ?? 0, r.idx + 1));
+  restoreStatus.failed = [];
+  for (const [p, n] of byPath) {
     if (fs.existsSync(p)) continue;
-    const parts = await db.select({ data: files.data }).from(files).where(eq(files.path, p)).orderBy(files.idx);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p + '.restore', Buffer.concat(parts.map((r) => r.data)));
-    fs.renameSync(p + '.restore', p);
-    n++;
+    try {
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      const tmp = p + '.restore';
+      fs.writeFileSync(tmp, '');
+      for (let i = 0; i < n; i++) {
+        const [r] = await db.select({ data: files.data }).from(files).where(and(eq(files.path, p), eq(files.idx, i)));
+        if (!r) throw new Error(`${i}-bo'lak yo'q`);
+        fs.appendFileSync(tmp, r.data);
+      }
+      fs.renameSync(tmp, p);
+      restoreStatus.restored++;
+    } catch (e) {
+      restoreStatus.failed.push(`${path.basename(p)}: ${(e as Error).message}`);
+      console.error('Tiklab bo‘lmadi:', p, (e as Error).message);
+    }
   }
-  if (n) console.log(`Bazadan ${n} ta fayl tiklandi`);
+  restoreStatus.done = !restoreStatus.failed.length;
+  console.log(`Bazadan ${restoreStatus.restored} ta fayl tiklandi${restoreStatus.failed.length ? `, ${restoreStatus.failed.length} tasi xato` : ''}`);
+  return restoreStatus;
 }
