@@ -10,6 +10,7 @@ import { HTTPException } from 'hono/http-exception';
 import { logger } from 'hono/logger';
 import { ActionError, applyAction, emptyState, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
 import { initDb, loadState, saveState } from './db';
+import { restoreFiles } from './files';
 import { media } from './media';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -117,10 +118,15 @@ serve({ fetch: app.fetch, port: PORT }, () => {
   else console.log('Panel uchun: npm run dev (Vite, http://localhost:5173) yoki npm run build');
   if (!TOKEN) console.log('Diqqat: ADMIN_TOKEN o‘rnatilmagan — faqat mahalliy foydalanish uchun.');
   // WORKER=1: joylash workeri shu jarayonda ishlaydi (hostingda alohida xizmat kerak bo'lmaydi).
+  // Worker fayllar bazadan tiklangandan keyin boshlanadi: aks holda video "yuklanmagan" deb matn yuborib qo'yishi mumkin.
+  const files = restoreFiles().catch((e: Error) => console.error('Fayllarni tiklab bo‘lmadi:', e.message));
   if (process.env.WORKER === '1') {
     process.env.PANEL_URL ||= `http://127.0.0.1:${PORT}`;
-    import('../tools/worker').catch((e: Error) => console.error('Worker ishga tushmadi:', e.message));
+    void files.then(() => import('../tools/worker')).catch((e: Error) => console.error('Worker ishga tushmadi:', e.message));
   }
+  // Render free 15 daqiqa so'rov kelmasa uxlaydi: o'zining ochiq manziliga har 10 daqiqada so'rov (worker va bot to'xtamasin).
+  const self = process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL;
+  if (self) setInterval(() => void fetch(`${self}/api/health`).catch(() => undefined), 10 * 60_000);
 });
 
 export type ApiType = typeof api;

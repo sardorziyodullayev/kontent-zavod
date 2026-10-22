@@ -1,0 +1,30 @@
+# Render Blueprint: panel + API + worker bitta tekin web xizmatda (Dockerfile).
+# Free rejasida disk doimiy emas: baza Turso'da (DATABASE_URL), media ham o'sha bazada saqlanadi (server/files.ts).
+# Uxlab qolmaslik uchun server o'z manziliga (RENDER_EXTERNAL_URL) har 10 daqiqada so'rov yuboradi.
+services:
+  - type: web
+    name: kontent-zavod
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_AUTH_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHANNEL
+        sync: false
+      - key: TELEGRAM_OWNER_ID
+        sync: false
+      - key: YOUTUBE_CLIENT_ID
+        sync: false
+      - key: YOUTUBE_CLIENT_SECRET
+        sync: false
+      - key: YOUTUBE_REFRESH_TOKEN
+        sync: false

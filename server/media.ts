@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { mirror, unmirror } from './files';
 
 export const MEDIA_DIR = path.resolve(process.env.MEDIA_DIR ?? 'media');
 const MAX_BYTES = Number(process.env.MEDIA_MAX_MB ?? 300) * 1024 * 1024;
@@ -50,11 +51,13 @@ export const media = new Hono()
       fs.rmSync(tmp, { force: true });
       throw e;
     }
-    for (const f of filesOf(id)) fs.rmSync(f);
-    fs.renameSync(tmp, path.join(MEDIA_DIR, id + ext));
+    for (const f of filesOf(id)) { fs.rmSync(f); await unmirror(f); }
+    const file = path.join(MEDIA_DIR, id + ext);
+    fs.renameSync(tmp, file);
+    await mirror(file);
     return c.json(listMedia().find((m) => m.videoId === id), 201);
   })
-  .delete('/:id', (c) => {
-    for (const f of filesOf(safeId(c.req.param('id')))) fs.rmSync(f);
+  .delete('/:id', async (c) => {
+    for (const f of filesOf(safeId(c.req.param('id')))) { fs.rmSync(f); await unmirror(f); }
     return c.json({ ok: true });
   });

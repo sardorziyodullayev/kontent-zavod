@@ -17,6 +17,8 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const URL = process.env.DATABASE_URL || `file:${path.join(DATA_DIR, 'zavod.db')}`;
 const client = createClient({ url: URL, authToken: process.env.DATABASE_AUTH_TOKEN || undefined });
 export const db = drizzle(client, { schema });
+/** Baza masofada (Turso): mahalliy disk ishonchsiz, fayllar ham bazaga ko'chiriladi (server/files.ts). */
+export const REMOTE_DB = process.env.FILES_IN_DB === '1' || !URL.startsWith('file:'); // FILES_IN_DB=1: mahalliy sinov uchun
 
 export async function initDb() {
   if (URL.startsWith('file:')) await client.execute('PRAGMA journal_mode = WAL');
@@ -52,7 +54,11 @@ export async function loadState(): Promise<State | null> {
   };
 }
 
+// Har daqiqalik tick odatda hech narsani o'zgartirmaydi: o'zgarmagan holat qayta yozilmaydi (Turso yozish limiti).
+let lastSaved = '';
 export async function saveState(s: State) {
+  const snap = JSON.stringify(s);
+  if (snap === lastSaved) return;
   await db.transaction(async (tx) => {
     await tx.delete(schema.posts);
     await tx.delete(schema.videos);
@@ -75,4 +81,5 @@ export async function saveState(s: State) {
     const acts = [...s.activity].reverse();
     for (let i = 0; i < acts.length; i += 100) await tx.insert(schema.activity).values(acts.slice(i, i + 100));
   });
+  lastSaved = snap;
 }

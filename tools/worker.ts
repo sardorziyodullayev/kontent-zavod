@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { PlatformId, QueueItem, State } from '../src/core/types';
+import { mirrorSoon } from '../server/files';
 import { channel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 import { buildDigest } from '../src/core/digest';
 import { dayStart, fmtDate, fmtTime, localHour } from '../src/core/format';
@@ -130,6 +131,7 @@ async function dailyDigest() {
   await sendDigest(owner);
   fs.mkdirSync(path.dirname(DIGEST_FILE), { recursive: true });
   fs.writeFileSync(DIGEST_FILE, day);
+  mirrorSoon(DIGEST_FILE);
   console.log('Ertalabki hisobot yuborildi');
 }
 
@@ -140,7 +142,7 @@ const BOT_FILE = path.join(DATA_DIR, 'bot-state.json');
 const GIFT_FILE = process.env.GIFT_FILE ?? path.resolve('brand/30-sorov.pdf');
 type BotState = { asked: Record<string, true>; leadWait: number[] };
 const loadBot = (): BotState => { try { return { asked: {}, leadWait: [], ...JSON.parse(fs.readFileSync(BOT_FILE, 'utf8')) }; } catch { return { asked: {}, leadWait: [] }; } };
-const saveBot = (s: BotState) => { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(BOT_FILE, JSON.stringify(s)); };
+const saveBot = (s: BotState) => { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(BOT_FILE, JSON.stringify(s)); mirrorSoon(BOT_FILE); };
 const html = (chat_id: number | string, text: string, extra: object = {}) => tg('sendMessage', { chat_id, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...extra });
 const mediaOf = (videoId: string) => ['.mp4', '.mov'].map((e) => path.join(MEDIA_DIR, videoId + e)).find((f) => fs.existsSync(f));
 async function sendFile(method: 'sendVideo' | 'sendDocument', chat_id: number | string, file: string, caption: string) {
@@ -253,7 +255,9 @@ async function onMessage(m: NonNullable<Update['message']>, OWNER?: string) {
   // murojaat: tugmadan keyingi yoki istalgan erkin xabar egasiga yetkaziladi
   const from = m.from ?? { id: m.chat.id };
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.appendFileSync(path.join(DATA_DIR, 'leads.jsonl'), JSON.stringify({ t: Date.now(), id: from.id, username: from.username ?? null, name: [from.first_name, from.last_name].filter(Boolean).join(' '), text: m.text }) + '\n');
+  const leads = path.join(DATA_DIR, 'leads.jsonl');
+  fs.appendFileSync(leads, JSON.stringify({ t: Date.now(), id: from.id, username: from.username ?? null, name: [from.first_name, from.last_name].filter(Boolean).join(' '), text: m.text }) + '\n');
+  mirrorSoon(leads);
   if (OWNER) await html(OWNER, leadText(from, m.text));
   bs.leadWait = bs.leadWait.filter((c) => c !== m.chat.id);
   saveBot(bs);

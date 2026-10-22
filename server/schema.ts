@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { blob, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type { ChecklistKey, GrowthModel, Script, Snapshot } from '../src/core/types';
 
 export const videos = sqliteTable('videos', {
@@ -58,3 +58,15 @@ export const meta = sqliteTable('meta', {
   key: text('key').primaryKey(),
   value: text('value', { mode: 'json' }).notNull(),
 });
+
+/** Disk o'chib ketadigan hosting (Render free) uchun: media va worker fayllarining bazadagi nusxasi, 1 MB lik bo'laklarda */
+export const files = sqliteTable(
+  'files',
+  {
+    path: text('path').notNull(),
+    idx: integer('idx').notNull(),
+    data: blob('data', { mode: 'buffer' }).notNull(),
+    mtime: integer('mtime').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.path, t.idx] })],
+);
