@@ -11,7 +11,7 @@ import { logger } from 'hono/logger';
 import { ActionError, applyAction, emptyState, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
 import { initDb, loadState, saveState } from './db';
 import { restoreFiles, restoreStatus } from './files';
-import { media } from './media';
+import { media, publicMedia } from './media';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -93,6 +93,7 @@ const api = new Hono()
 const app = new Hono();
 app.use('/api/*', logger());
 app.route('/api', api);
+app.route('/pub', publicMedia);
 app.onError((err, c) => {
   if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
   if (err instanceof ActionError || err instanceof SyntaxError) return c.json({ error: err.message }, 400);

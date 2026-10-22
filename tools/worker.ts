@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { PlatformId, QueueItem, State } from '../src/core/types';
 import { mirrorSoon } from '../server/files';
+import { publicMediaPath } from '../server/media';
+import { account as igAccount, instagramConfigured, publishReel, refreshToken as igRefresh } from './instagram';
 import { channel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 import { buildDigest } from '../src/core/digest';
 import { dayStart, localHour } from '../src/core/format';
@@ -57,9 +59,12 @@ const adapters: Record<PlatformId, Adapter> = {
     const description = job.caption.replace(job.hashtags, '').trim();
     return { url: await uploadVideo(file, { title: job.title, description, hashtags: job.hashtags, short: job.format === 'short' }) };
   },
-  async instagram() {
+  async instagram(job, file) {
     need('IG_USER_ID', 'IG_ACCESS_TOKEN');
-    throw new Error('Instagram yuklash hali yozilmagan: media (REELS) → media_publish');
+    if (!file) throw new Error('Video fayl yuklanmagan (Instagram faqat Reels)');
+    const base = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL;
+    if (!base) throw new Error('PUBLIC_URL sozlanmagan: Instagram videoni ochiq havoladan oladi');
+    return { url: await publishReel(base + publicMediaPath(job.videoId), job.caption) };
   },
   async tiktok() {
     need('TIKTOK_ACCESS_TOKEN');
@@ -85,6 +90,19 @@ async function syncTelegram() {
   if (res.result !== tgFollowers) console.log('Telegram obunachilar:', res.result);
   tgFollowers = res.result;
   tgSentAt = Date.now();
+}
+
+/** Instagram: token yangilash (haftasiga) va obunachilar, har 30 daqiqada. */
+let igSyncedAt = 0;
+async function syncInstagram() {
+  if (!instagramConfigured() || Date.now() - igSyncedAt < 30 * 60_000) return;
+  igSyncedAt = Date.now();
+  await igRefresh().catch((e: Error) => console.error('Instagram token:', e.message));
+  const a = await igAccount();
+  const { state } = await api<{ state: State }>('/api/state');
+  const pl = state.platforms.find((p) => p.id === 'instagram');
+  await api('/api/action', { type: 'platform.update', payload: { id: 'instagram', patch: { followers: a.followers_count, ...(pl?.connected ? {} : { connected: true }), ...(pl?.handle === '@' + a.username ? {} : { handle: '@' + a.username }) } } });
+  console.log(`Instagram: @${a.username}, ${a.followers_count} obunachi`);
 }
 
 /** YouTube: kanal obunachilari va joylangan videolar statistikasi, har 30 daqiqada (kvota: ~2 birlik). */
@@ -272,6 +290,7 @@ async function onMessage(m: NonNullable<Update['message']>, OWNER?: string) {
 async function runOnce() {
   await syncTelegram().catch((e: Error) => console.error(e.message));
   await syncYoutube().catch((e: Error) => console.error(e.message));
+  await syncInstagram().catch((e: Error) => console.error(e.message));
   await pollBot().catch((e: Error) => console.error(e.message));
   await dailyDigest().catch((e: Error) => console.error(e.message));
   await askApprovals().catch((e: Error) => console.error(e.message));
@@ -296,5 +315,10 @@ async function runOnce() {
 }
 
 console.log(`Worker: ${API} (har ${INTERVAL / 1000} s)`);
-await runOnce().catch((e: Error) => console.error(e.message));
-if (!ONCE) setInterval(() => runOnce().catch((e: Error) => console.error(e.message)), INTERVAL);
+// Keyingi aylanish oldingisi tugagandan keyin: Instagram/YouTube yuklash bir daqiqadan uzoq cho'zilsa,
+// setInterval bir postni ikki marta joylab yuborardi.
+for (;;) {
+  await runOnce().catch((e: Error) => console.error(e.message));
+  if (ONCE) break;
+  await new Promise((ok) => setTimeout(ok, INTERVAL));
+}

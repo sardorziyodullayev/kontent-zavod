@@ -1,4 +1,5 @@
 // Video fayllar: panel yuklaydi, worker platformaga yuboradi. Fayl nomi: <MEDIA_DIR>/<videoId>.mp4|.mov
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -61,3 +62,17 @@ export const media = new Hono()
     for (const f of filesOf(safeId(c.req.param('id')))) { fs.rmSync(f); await unmirror(f); }
     return c.json({ ok: true });
   });
+
+/** Ochiq, taxmin qilib bo'lmaydigan havola imzosi: Instagram videoni tokensiz yuklab oladi. */
+export const mediaSig = (id: string) => crypto.createHmac('sha256', process.env.ADMIN_TOKEN || 'dev').update('media:' + id).digest('hex').slice(0, 32);
+export const publicMediaPath = (id: string) => `/pub/${id}-${mediaSig(id)}.mp4`;
+
+// /pub/<videoId>-<imzo>.mp4 — faqat imzo to'g'ri bo'lsa (API tokeni talab qilinmaydi)
+export const publicMedia = new Hono().get('/:file', (c) => {
+  const m = /^(v\d+)-([0-9a-f]{32})\.mp4$/.exec(c.req.param('file'));
+  if (!m || !crypto.timingSafeEqual(Buffer.from(m[2]), Buffer.from(mediaSig(m[1])))) return c.text('Topilmadi', 404);
+  const file = filesOf(m[1])[0];
+  if (!file) return c.text('Topilmadi', 404);
+  const body = Readable.toWeb(fs.createReadStream(file)) as unknown as ReadableStream;
+  return c.body(body, 200, { 'Content-Type': file.endsWith('.mov') ? 'video/quicktime' : 'video/mp4', 'Content-Length': String(fs.statSync(file).size) });
+});
