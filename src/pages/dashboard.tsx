@@ -7,7 +7,7 @@ import {
 } from '@/core';
 import { AlertsCard } from '@/components/alerts';
 import { FactoryNow } from '@/components/factory-now';
-import { BarRow, Delta, PChips, Pf, Sparkline, StatTile, pcolor } from '@/components/bits';
+import { BarRow, CountUp, Delta, PChips, Pf, Sparkline, StatTile, pcolor } from '@/components/bits';
 import { MultiLine } from '@/components/line-chart';
 import { useAppState } from '@/components/shell';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -133,10 +133,10 @@ function Kpis({ state, now }: { state: State; now: number }) {
   const foot = `oldingi ${period} kunga`;
   return (
     <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-      <StatTile accent icon={Eye} label="Ko‘rishlar" title={fmtFull(d.k.cur.views)} value={fmtNum(d.k.cur.views)} delta={<Delta cur={d.k.cur.views} prev={d.k.prev.views} />} foot={foot} spark={<Sparkline values={d.views} color="var(--accent-ink)" accent="var(--accent-ink)" />} />
-      <StatTile icon={UserPlus} label="Yangi obunachilar" title={fmtFull(d.k.cur.subs)} value={`+${fmtNum(d.k.cur.subs)}`} delta={<Delta cur={d.k.cur.subs} prev={d.k.prev.subs} />} foot={foot} spark={<Sparkline values={d.subs} />} />
-      <StatTile icon={Send} label="Joylashlar" value={fmtFull(d.k.cur.posts)} delta={<Delta cur={d.k.cur.posts} prev={d.k.prev.posts} />} foot={foot} spark={<Sparkline values={d.posts} />} />
-      <StatTile icon={Heart} label="O‘rtacha ER" title="layk + izoh + ulashish + saqlash / ko‘rish" value={`${(d.k.cur.er * 100).toFixed(1)}%`} delta={<Delta cur={d.k.cur.er} prev={d.k.prev.er} />} foot={foot} />
+      <StatTile accent icon={Eye} label="Ko‘rishlar" title={fmtFull(d.k.cur.views)} value={<CountUp value={d.k.cur.views} format={fmtNum} />} delta={<Delta cur={d.k.cur.views} prev={d.k.prev.views} />} foot={foot} spark={<Sparkline values={d.views} color="var(--accent-ink)" accent="var(--accent-ink)" />} />
+      <StatTile icon={UserPlus} label="Yangi obunachilar" title={fmtFull(d.k.cur.subs)} value={<CountUp value={d.k.cur.subs} format={(n) => `+${fmtNum(n)}`} />} delta={<Delta cur={d.k.cur.subs} prev={d.k.prev.subs} />} foot={foot} spark={<Sparkline values={d.subs} />} />
+      <StatTile icon={Send} label="Joylashlar" value={<CountUp value={d.k.cur.posts} format={fmtFull} />} delta={<Delta cur={d.k.cur.posts} prev={d.k.prev.posts} />} foot={foot} spark={<Sparkline values={d.posts} />} />
+      <StatTile icon={Heart} label="O‘rtacha ER" title="layk + izoh + ulashish + saqlash / ko‘rish" value={<CountUp value={d.k.cur.er * 100} format={(n) => `${n.toFixed(1)}%`} />} delta={<Delta cur={d.k.cur.er} prev={d.k.prev.er} />} foot={foot} />
     </div>
   );
 }

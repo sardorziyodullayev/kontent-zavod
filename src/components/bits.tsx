@@ -1,6 +1,6 @@
 // Kichik domen komponentlari: platforma belgilari, holat teglari, muqova, delta, sparkline.
 import { ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { hashStr, pname, pshort, stageName, type PlatformId, type PostStatus, type Stage, type Video } from '@/core';
 import { cn } from '@/lib/utils';
 import { Card, Tag, type Tone } from './ui/primitives';
@@ -55,6 +55,27 @@ export function Delta({ cur, prev, invert }: { cur: number; prev: number; invert
   );
 }
 
+/** Raqam 0 dan (yoki oldingi qiymatdan) yangisigacha ~0.9 s da sanab chiqadi. */
+export function CountUp({ value, format = (n) => String(Math.round(n)) }: { value: number; format?: (n: number) => string }) {
+  const [n, setN] = useState(0);
+  const from = useRef(0);
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { setN(value); from.current = value; return; }
+    const a = from.current, t0 = performance.now(), dur = 900;
+    let id = 0;
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      const cur = a + (value - a) * e;
+      setN(cur);
+      from.current = cur;
+      if (k < 1) id = requestAnimationFrame(step);
+    };
+    id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [value]);
+  return <>{format(Number.isInteger(value) ? Math.round(n) : n)}</>;
+}
+
 export function Sparkline({ values, w = 96, h = 28, color = 'var(--muted)', accent = 'var(--accent-text)' }: { values: number[]; w?: number; h?: number; color?: string; accent?: string }) {
   if (!values.length) return null;
   const max = Math.max(1, ...values), min = Math.min(...values);
@@ -63,15 +84,15 @@ export function Sparkline({ values, w = 96, h = 28, color = 'var(--muted)', acce
   const l = values.length - 1;
   return (
     <svg width={w} height={h} aria-hidden="true" className="shrink-0">
-      <polyline points={values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')} fill="none" style={{ stroke: color }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={x(l)} cy={y(values[l])} r={3} style={{ fill: accent }} />
+      <polyline className="draw" pathLength={1} points={values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')} fill="none" style={{ stroke: color }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      <circle className="blip" cx={x(l)} cy={y(values[l])} r={3} style={{ fill: accent }} />
     </svg>
   );
 }
 
 export function StatTile({ label, value, delta, foot, spark, title, icon: Icon, accent }: { label: string; value: ReactNode; delta?: ReactNode; foot?: ReactNode; spark?: ReactNode; title?: string; icon?: LucideIcon; accent?: boolean }) {
   return (
-    <Card className={cn('grid gap-3 max-sm:p-4', accent && 'border-transparent bg-accent text-accent-ink')} title={title}>
+    <Card className={cn('lift grid gap-3 max-sm:p-4', accent && 'border-transparent bg-accent text-accent-ink')} title={title}>
       <div className="flex items-center gap-2.5">
         {Icon && <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', accent ? 'bg-accent-ink/10' : 'bg-surface-2 text-ink-2')}><Icon size={17} /></span>}
         <span className={cn('min-w-0 text-[13.5px] leading-tight font-medium max-sm:text-[12.5px]', accent ? 'text-accent-ink/75' : 'text-ink-2')}>{label}</span>
@@ -102,7 +123,7 @@ export function BarRow({ label, value, max, display, color, title, labelWidth = 
     <div className="grid items-center gap-3 text-[13px]" style={{ gridTemplateColumns: `${labelWidth}px minmax(0,1fr) 64px` }} title={title}>
       <span className="min-w-0 truncate">{label}</span>
       <div className="h-2.5">
-        <div className="h-2.5 min-w-0.5 rounded-r" style={{ width: `${(value / (max || 1)) * 100}%`, background: color }} />
+        <div className="grow-x h-2.5 min-w-0.5 rounded-r" style={{ width: `${(value / (max || 1)) * 100}%`, background: color }} />
       </div>
       <span className="text-right font-medium tnum">{display}</span>
     </div>

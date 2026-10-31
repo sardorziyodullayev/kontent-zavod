@@ -19,7 +19,7 @@ const sizes: Record<Size, string> = {
 };
 
 export const buttonClass = (variant: Variant = 'default', size: Size = 'md', className?: string) =>
-  cn('inline-flex shrink-0 items-center font-medium whitespace-nowrap no-underline disabled:cursor-not-allowed disabled:opacity-45', variants[variant], sizes[size], className);
+  cn('inline-flex shrink-0 items-center font-medium whitespace-nowrap no-underline transition-[background-color,color,opacity,transform,filter] duration-150 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100', variants[variant], sizes[size], className);
 
 export function Button({ variant, size, className, type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size }) {
   return <button type={type} className={buttonClass(variant, size, className)} {...props} />;

@@ -31,7 +31,7 @@ export function Meter({ value, tone = 'accent', className }: { value: number; to
   const color = tone === 'crit' ? 'bg-critical' : tone === 'warn' ? 'bg-warning' : 'bg-accent';
   return (
     <div className={cn('h-2 overflow-hidden rounded-full bg-surface-3', className)} role="meter" aria-valuenow={Math.round(value * 100)} aria-valuemin={0} aria-valuemax={100}>
-      <i className={cn('block h-full rounded-full', color)} style={{ width: `${Math.max(0, Math.min(100, value * 100)).toFixed(1)}%` }} />
+      <i className={cn('grow-x block h-full rounded-full', color)} style={{ width: `${Math.max(0, Math.min(100, value * 100)).toFixed(1)}%` }} />
     </div>
   );
 }
@@ -40,7 +40,7 @@ export function Segmented<T extends string | number>({ value, options, onChange,
   return (
     <div role="group" aria-label={label} className="inline-flex rounded-full bg-surface p-1 shadow-card">
       {options.map((o) => (
-        <button key={String(o.value)} aria-pressed={value === o.value} onClick={() => onChange(o.value)} className={cn('rounded-full px-3.5 py-[6px] text-[13px] font-medium text-ink-2 hover:text-ink', value === o.value && 'bg-pill text-pill-ink hover:text-pill-ink')}>
+        <button key={String(o.value)} aria-pressed={value === o.value} onClick={() => onChange(o.value)} className={cn('rounded-full px-3.5 py-[6px] text-[13px] font-medium text-ink-2 transition-colors duration-200 hover:text-ink', value === o.value && 'bg-pill text-pill-ink hover:text-pill-ink')}>
           {o.label}
         </button>
       ))}

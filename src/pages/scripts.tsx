@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Eye, Factory, Plus, Search, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { DAY, STAGES, fmtNum, fmtTime, firstPublish, readiness, relDay, stageName, videoStats, type Stage, type Video } from '@/core';
-import { PChips } from '@/components/bits';
+import { CountUp, PChips } from '@/components/bits';
 import { useAppState } from '@/components/shell';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Card } from '@/components/ui/primitives';
@@ -69,7 +69,7 @@ function KCard({ v, now }: { v: Video; now: number }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: v.id });
   return (
     <article ref={setNodeRef} {...listeners} {...attributes} onClick={() => openVideo(v.id, 'script')}
-      className={cn(cardClass, 'cursor-grab outline-line-2 hover:outline', isDragging && 'opacity-35')}>
+      className={cn(cardClass, 'lift rise cursor-grab', isDragging && 'opacity-35')}>
       <CardBody v={v} now={now} />
     </article>
   );
@@ -110,7 +110,7 @@ function Summary({ by, dueSoon }: { by: Record<Stage, Video[]>; dueSoon: number 
             <span className={cn('grid size-10 shrink-0 place-items-center rounded-xl max-sm:hidden', c.warn ? 'bg-critical/12 text-critical-text' : 'bg-surface-2 text-ink-2')}><c.icon size={18} /></span>
             <div className="min-w-0">
               <div className="truncate text-[12.5px] text-muted">{c.label}</div>
-              <div className="text-[24px] leading-tight font-semibold tracking-[-0.03em] tnum">{c.value}</div>
+              <div className="text-[24px] leading-tight font-semibold tracking-[-0.03em] tnum"><CountUp value={c.value} /></div>
               <div className="hidden truncate text-[11.5px] text-muted sm:block">{c.sub}</div>
             </div>
           </div>
@@ -119,7 +119,7 @@ function Summary({ by, dueSoon }: { by: Record<Stage, Video[]>; dueSoon: number 
       <div className="border-t border-line px-4 py-3.5 sm:px-5">
         <div className="flex h-2.5 gap-[3px] overflow-hidden rounded-full" aria-hidden="true">
           {STAGES.map((s, i) => by[s.id].length > 0 && (
-            <i key={s.id} className="h-full rounded-full" title={`${s.name}: ${by[s.id].length}`}
+            <i key={s.id} className="grow-x h-full rounded-full" title={`${s.name}: ${by[s.id].length}`}
               style={{ flex: by[s.id].length / total, background: s.id === 'published' ? 'var(--accent)' : `color-mix(in oklab, var(--text) ${18 + i * 9}%, transparent)` }} />
           ))}
         </div>

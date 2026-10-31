@@ -19,7 +19,7 @@ function Sidebar({ data }: { data: AppData }) {
   const now = useNow(60_000);
   const crit = alerts(data.state, now).filter((a) => a.level === 'critical').length;
   return (
-    <aside className={cn('fixed top-0 z-[60] flex h-screen w-[264px] md:z-10 flex-col gap-1 rounded-r-[26px] bg-surface px-3.5 py-5 shadow-pop transition-transform md:sticky md:top-4 md:m-4 md:mr-0 md:h-[calc(100vh-2rem)] md:w-auto md:translate-x-0 md:rounded-[26px] md:border md:border-[var(--card-border)] md:shadow-card', menu ? 'translate-x-0' : '-translate-x-full')} aria-label="Asosiy menyu">
+    <aside className={cn('fixed top-0 z-[60] flex h-screen w-[264px] duration-300 ease-out md:z-10 flex-col gap-1 rounded-r-[26px] bg-surface px-3.5 py-5 shadow-pop transition-transform md:sticky md:top-4 md:m-4 md:mr-0 md:h-[calc(100vh-2rem)] md:w-auto md:translate-x-0 md:rounded-[26px] md:border md:border-[var(--card-border)] md:shadow-card', menu ? 'translate-x-0' : '-translate-x-full')} aria-label="Asosiy menyu">
       <Link to="/" className="flex items-center gap-3 px-2 pt-0.5 pb-5">
         <PixelLogo size={38} />
         <span className="min-w-0">
@@ -32,8 +32,8 @@ function Sidebar({ data }: { data: AppData }) {
           <div key={n.to}>
             {(i === 0 || NAV[i - 1].group !== n.group) && <div className={cn('px-3 pb-2 text-[12px] font-medium text-muted', i > 0 && 'mt-4')}>{n.group}</div>}
             <Link to={n.to} onClick={() => setUI({ menu: false })} activeOptions={{ exact: n.to === '/' }}
-              className="group flex items-center gap-3 rounded-[14px] px-3 py-[10px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink data-[status=active]:bg-accent data-[status=active]:font-semibold data-[status=active]:text-accent-ink">
-              <n.icon size={18} strokeWidth={1.9} />
+              className="group flex items-center gap-3 rounded-[14px] px-3 py-[10px] font-medium text-ink-2 transition-[background-color,color,transform] duration-200 hover:translate-x-0.5 hover:bg-surface-2 hover:text-ink data-[status=active]:bg-accent data-[status=active]:font-semibold data-[status=active]:text-accent-ink">
+              <n.icon size={18} strokeWidth={1.9} className="transition-transform duration-300 group-hover:scale-110 group-data-[status=active]:scale-110" />
               {n.name}
               {n.to === '/' && crit > 0 && <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-critical px-1.5 text-[11px] font-bold text-white" title="Muhim ogohlantirishlar">{crit}</span>}
             </Link>

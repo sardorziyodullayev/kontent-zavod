@@ -38,6 +38,9 @@ export const pfList = (pf: UI['pf'], all: PlatformId[]) => (pf === 'all' ? all :
 export function setTheme(t: 'dark' | 'light' | 'system') {
   ls.set('kz-theme', t);
   const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const html = document.documentElement;
+  html.classList.add('theme-fade');
+  html.dataset.theme = dark ? 'dark' : 'light';
+  setTimeout(() => html.classList.remove('theme-fade'), 400);
   setUI({ theme: dark ? 'dark' : 'light' });
 }
