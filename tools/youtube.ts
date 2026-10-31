@@ -3,25 +3,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import type { ChannelVideo, ExtChannel } from '../src/core/types';
 
 const API = 'https://www.googleapis.com/youtube/v3';
-let cached: { token: string; until: number } | null = null;
+const cached = new Map<string, { token: string; until: number }>(); // refresh token → access token
 
 export const youtubeConfigured = () => !!(process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET && process.env.YOUTUBE_REFRESH_TOKEN);
 
-async function accessToken() {
-  if (cached && cached.until > Date.now() + 60_000) return cached.token;
+async function accessToken(refresh = process.env.YOUTUBE_REFRESH_TOKEN!) {
+  const c = cached.get(refresh);
+  if (c && c.until > Date.now() + 60_000) return c.token;
   const r: { access_token?: string; expires_in?: number; error?: string; error_description?: string } = await (await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
-    body: new URLSearchParams({ client_id: process.env.YOUTUBE_CLIENT_ID!, client_secret: process.env.YOUTUBE_CLIENT_SECRET!, refresh_token: process.env.YOUTUBE_REFRESH_TOKEN!, grant_type: 'refresh_token' }),
+    body: new URLSearchParams({ client_id: process.env.YOUTUBE_CLIENT_ID!, client_secret: process.env.YOUTUBE_CLIENT_SECRET!, refresh_token: refresh, grant_type: 'refresh_token' }),
   })).json();
   if (!r.access_token) throw new Error(`YouTube token: ${r.error_description ?? r.error} — npm run youtube:auth bilan qayta ulang`);
-  cached = { token: r.access_token, until: Date.now() + (r.expires_in ?? 3600) * 1000 };
-  return cached.token;
+  cached.set(refresh, { token: r.access_token, until: Date.now() + (r.expires_in ?? 3600) * 1000 });
+  return r.access_token;
 }
 
-async function yt<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const r = await fetch(url, { ...init, headers: { Authorization: `Bearer ${await accessToken()}`, ...init.headers } });
+async function yt<T>(url: string, init: RequestInit = {}, refresh?: string): Promise<T> {
+  const r = await fetch(url, { ...init, headers: { Authorization: `Bearer ${await accessToken(refresh)}`, ...init.headers } });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`YouTube ${r.status}: ${(j as { error?: { message?: string } }).error?.message ?? r.statusText}`);
   return j as T;
@@ -80,4 +82,29 @@ export async function channel() {
   const c = r.items?.[0];
   if (!c) throw new Error('YouTube: bu akkauntda kanal yo‘q');
   return { title: c.snippet.title, handle: c.snippet.customUrl ?? c.snippet.title, subscribers: Number(c.statistics.subscriberCount) };
+}
+
+/** "PT4M55S" → 295 */
+export function isoDuration(d: string) {
+  const m = d.match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  return m ? (Number(m[1] ?? 0) * 86400 + Number(m[2] ?? 0) * 3600 + Number(m[3] ?? 0) * 60 + Number(m[4] ?? 0)) : 0;
+}
+
+/** Kuzatiladigan kanal (o'z refresh tokeni bilan): umumiy statistika va oxirgi 50 ta video, yopiqlari ham. Kvota: ~3 birlik. */
+export async function extChannel(key: string, refresh: string): Promise<Omit<ExtChannel, 'history' | 'syncedAt'>> {
+  type Ch = { id: string; snippet: { title: string; customUrl?: string; thumbnails?: { default?: { url: string } } }; statistics: { subscriberCount: string; viewCount: string; videoCount: string }; contentDetails: { relatedPlaylists: { uploads: string } } };
+  const c = (await yt<{ items?: Ch[] }>(`${API}/channels?part=snippet,statistics,contentDetails&mine=true`, {}, refresh)).items?.[0];
+  if (!c) throw new Error(`YouTube (${key}): kanal topilmadi`);
+  const pl = await yt<{ items?: { contentDetails: { videoId: string } }[] }>(`${API}/playlistItems?part=contentDetails&maxResults=50&playlistId=${c.contentDetails.relatedPlaylists.uploads}`, {}, refresh);
+  const ids = (pl.items ?? []).map((i) => i.contentDetails.videoId);
+  type V = { id: string; snippet: { title: string; publishedAt: string }; status: { privacyStatus: ChannelVideo['privacy']; publishAt?: string }; contentDetails: { duration: string }; statistics: { viewCount?: string; likeCount?: string; commentCount?: string } };
+  const vs = ids.length ? (await yt<{ items: V[] }>(`${API}/videos?part=snippet,status,contentDetails,statistics&id=${ids.join(',')}`, {}, refresh)).items : [];
+  return {
+    id: c.id, key, title: c.snippet.title, handle: c.snippet.customUrl ?? c.snippet.title, thumb: c.snippet.thumbnails?.default?.url,
+    subscribers: Number(c.statistics.subscriberCount), views: Number(c.statistics.viewCount), videoCount: Number(c.statistics.videoCount),
+    videos: vs.map((v) => ({
+      id: v.id, title: v.snippet.title, publishedAt: Date.parse(v.snippet.publishedAt), privacy: v.status.privacyStatus, publishAt: v.status.publishAt ? Date.parse(v.status.publishAt) : null,
+      duration: isoDuration(v.contentDetails.duration), views: Number(v.statistics.viewCount ?? 0), likes: Number(v.statistics.likeCount ?? 0), comments: Number(v.statistics.commentCount ?? 0),
+    })),
+  };
 }

@@ -1,5 +1,5 @@
-import { Link2, RefreshCw } from 'lucide-react';
-import { DAY, allPosts, bestSlots, fmtDur, fmtFull, fmtNum, followersAt, platformMeta, postStats, slotLabel } from '@/core';
+import { ExternalLink, Link2, RefreshCw } from 'lucide-react';
+import { DAY, allPosts, bestSlots, fmtDate, fmtDur, fmtFull, fmtNum, followersAt, platformMeta, postStats, slotLabel, type ExtChannel } from '@/core';
 import { Pf, Sparkline, pcolor } from '@/components/bits';
 import { useAppState } from '@/components/shell';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,8 @@ export function PlatformsPage() {
         })}
       </div>
 
+      {state.channels?.map((c) => <ChannelCard key={c.key} c={c} now={now} />)}
+
       <Card className="mt-4">
         <CardHead title="Haqiqiy API’larga ulash" sub="server rejimida worker shu kalitlar bilan ishlaydi" />
         <div className="-mx-5 overflow-x-auto px-5">
@@ -72,5 +74,65 @@ export function PlatformsPage() {
         <p className="mt-3 text-[12.5px] text-muted">Kalitlarni <code className={code}>.env</code> faylga yozing (namuna: <code className={code}>.env.example</code>). Panel kalitlarni hech qachon brauzerga yubormaydi.</p>
       </Card>
     </>
+  );
+}
+
+const PRIVACY = { public: ['good', 'Ochiq'], unlisted: ['neutral', 'Havola orqali'], private: ['warning', 'Yopiq'] } as const;
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+/** Zavod joylamaydigan, faqat statistikasi kuzatiladigan YouTube kanal (worker: YT_CHANNELS). */
+function ChannelCard({ c, now }: { c: ExtChannel; now: number }) {
+  const back = (days: number) => [...c.history].reverse().find((h) => h.t <= now - days * DAY) ?? c.history[0];
+  const h30 = back(30);
+  const spark = c.history.filter((h) => h.t >= now - 30 * DAY).map((h) => h.subs);
+  const stale = now - c.syncedAt > 2 * 3600e3;
+  const tiles: [string, number, number][] = [['Obunachilar', c.subscribers, c.subscribers - (h30?.subs ?? c.subscribers)], ['Ko‘rishlar', c.views, c.views - (h30?.views ?? c.views)]];
+  return (
+    <Card className="mt-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        {c.thumb ? <img src={c.thumb} alt="" className="size-[34px] rounded-full" /> : <span className="grid size-[34px] place-items-center rounded-full text-xs font-bold text-white" style={{ background: pcolor('youtube') }}>YT</span>}
+        <div><b className="block text-[14.5px]">{c.title}</b><span className="text-xs text-muted">{c.handle} · YouTube · faqat statistika</span></div>
+        <Tag tone={stale ? 'warning' : 'good'} className="ml-auto" title={new Date(c.syncedAt).toLocaleString('ru-RU')}>{stale ? 'Yangilanmayapti' : 'Yangilangan'} {fmtDur(c.syncedAt - now)}</Tag>
+        <a href={`https://www.youtube.com/${c.handle.startsWith('@') ? c.handle : 'channel/' + c.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[13px] text-ink-2 hover:text-ink"><ExternalLink size={14} />Kanal</a>
+      </div>
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+        {tiles.map(([k, v, d]) => (
+          <div key={k}>
+            <div className="text-xs text-muted">{k}</div>
+            <div className="text-[30px] font-semibold tracking-[-0.025em]">{fmtFull(v)}</div>
+            <div className="text-[12.5px] font-semibold">{d > 0 ? <span className="text-good-text">▲ +{fmtFull(d)}</span> : <span className="text-muted">—</span>} <span className="font-normal text-muted">30 kunda</span></div>
+          </div>
+        ))}
+        <div>
+          <div className="text-xs text-muted">Videolar</div>
+          <div className="text-[30px] font-semibold tracking-[-0.025em]">{c.videos.length}</div>
+          <div className="text-[12.5px] text-muted">{c.videos.filter((v) => v.privacy === 'public').length} tasi ochiq</div>
+        </div>
+        {spark.length > 1 && <Sparkline values={spark} w={140} h={40} color={pcolor('youtube')} accent={pcolor('youtube')} />}
+      </div>
+      {c.videos.length > 0 && (
+        <div className="-mx-5 mt-4 overflow-x-auto px-5">
+          <table className="table">
+            <thead><tr><th>Video</th><th>Holat</th><th>Sana</th><th>Davomiylik</th><th className="text-right">Ko‘rishlar</th><th className="text-right">Layk</th><th className="text-right">Izoh</th></tr></thead>
+            <tbody>
+              {c.videos.map((v) => {
+                const [tone, label] = v.privacy === 'private' && v.publishAt ? (['accent', 'Rejalangan'] as const) : PRIVACY[v.privacy];
+                return (
+                  <tr key={v.id}>
+                    <td className="max-w-[380px]"><a href={`https://youtu.be/${v.id}`} target="_blank" rel="noreferrer" className="line-clamp-1 hover:underline">{v.title}</a></td>
+                    <td><Tag tone={tone}>{label}</Tag></td>
+                    <td className="whitespace-nowrap">{fmtDate(v.publishAt ?? v.publishedAt)}</td>
+                    <td>{mmss(v.duration)}</td>
+                    <td className="text-right font-semibold">{fmtNum(v.views)}</td>
+                    <td className="text-right">{fmtNum(v.likes)}</td>
+                    <td className="text-right">{fmtNum(v.comments)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }

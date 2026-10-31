@@ -7,7 +7,7 @@ import type { PlatformId, QueueItem, State } from '../src/core/types';
 import { mirrorSoon } from '../server/files';
 import { publicMediaPath } from '../server/media';
 import { account as igAccount, instagramConfigured, publishReel, refreshToken as igRefresh } from './instagram';
-import { channel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
+import { channel, extChannel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 import { buildDigest } from '../src/core/digest';
 import { dayStart, localHour } from '../src/core/format';
 import { GIFT_MISSING, LEAD_PROMPT, LEAD_THANKS, OWNER_HELP, PUBLIC_MENU, PUBLIC_WELCOME, SERVICES_TEXT, approvalText, approvedText, awaitingApproval, leadText, nextFreeSlot, planText, postponedText, statsText } from '../src/core/bot';
@@ -124,6 +124,24 @@ async function syncYoutube() {
     await api(`/api/posts/${p.id}/stats`, { stats: s });
   }
   console.log(`YouTube: ${ch.subscribers} obunachi, ${posts.length} ta video statistikasi yangilandi`);
+}
+
+/** Kuzatiladigan YouTube kanallar: YT_CHANNELS=tinyledger → TINYLEDGER_YT_REFRESH_TOKEN. Zavod ularga joylamaydi,
+ *  faqat obunachilar, ko'rishlar va videolar statistikasini panelga yozadi (har 30 daqiqada). */
+let chSyncedAt = 0;
+async function syncChannels() {
+  const keys = (process.env.YT_CHANNELS ?? '').split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
+  if (!keys.length || !process.env.YOUTUBE_CLIENT_ID || Date.now() - chSyncedAt < 30 * 60_000) return;
+  chSyncedAt = Date.now();
+  for (const key of keys) {
+    const refresh = process.env[`${key.toUpperCase()}_YT_REFRESH_TOKEN`];
+    if (!refresh) { console.error(`YouTube (${key}): ${key.toUpperCase()}_YT_REFRESH_TOKEN yo‘q`); continue; }
+    try {
+      const c = await extChannel(key, refresh);
+      await api('/api/action', { type: 'channel.sync', payload: c });
+      console.log(`YouTube ${c.handle}: ${c.subscribers} obunachi, ${c.views} ko‘rish, ${c.videos.length} video`);
+    } catch (e) { console.error((e as Error).message); }
+  }
 }
 
 /** Bot egasiga (TELEGRAM_OWNER_ID) ertalabki hisobot: har kuni DIGEST_HOUR da (Toshkent), bir marta.
@@ -291,6 +309,7 @@ async function runOnce() {
   await syncTelegram().catch((e: Error) => console.error(e.message));
   await syncYoutube().catch((e: Error) => console.error(e.message));
   await syncInstagram().catch((e: Error) => console.error(e.message));
+  await syncChannels().catch((e: Error) => console.error(e.message));
   await pollBot().catch((e: Error) => console.error(e.message));
   await dailyDigest().catch((e: Error) => console.error(e.message));
   await askApprovals().catch((e: Error) => console.error(e.message));

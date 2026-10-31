@@ -86,4 +86,17 @@ describe('yadro', () => {
     expect(C.followersAt(s, 'telegram', NOW + C.DAY)).toBe(412);
     expect(() => { C.kpis(s, NOW, 30); C.alerts(s, NOW); C.insights(s, NOW); C.nextQueue(s, NOW); C.dailySeries(s, NOW - 30 * C.DAY, NOW); }).not.toThrow();
   });
+
+  test('channel.sync: kuzatiladigan kanal qo‘shiladi, tarix faqat o‘zgarganda yoziladi, tozalashda saqlanadi', () => {
+    const s = C.emptyState(NOW);
+    const c = { id: 'UC1', key: 'tinyledger', title: 'Tiny Ledger', handle: '@tinyledger', subscribers: 0, views: 0, videoCount: 1, videos: [] };
+    C.applyAction(s, { type: 'channel.sync', payload: c }, NOW);
+    C.applyAction(s, { type: 'channel.sync', payload: c }, NOW + C.HOUR);
+    C.applyAction(s, { type: 'channel.sync', payload: { ...c, subscribers: 3 } }, NOW + 2 * C.HOUR);
+    expect(s.channels).toHaveLength(1);
+    expect(s.channels![0].history.map((h) => h.subs)).toEqual([0, 3]);
+    expect(s.channels![0].syncedAt).toBe(NOW + 2 * C.HOUR);
+    expect(C.emptyState(NOW, s).channels?.[0].subscribers).toBe(3);
+    expect(() => C.applyAction(s, { type: 'channel.sync', payload: { ...c, key: '' } }, NOW)).toThrow();
+  });
 });

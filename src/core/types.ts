@@ -80,6 +80,33 @@ export interface Platform {
   manualDelta?: number;
 }
 
+/** Zavod joylamaydigan, faqat kuzatiladigan YouTube kanal (masalan Tiny Ledger). Worker har 30 daqiqada yangilaydi. */
+export interface ChannelVideo {
+  id: string;
+  title: string;
+  publishedAt: number;
+  privacy: 'public' | 'unlisted' | 'private';
+  publishAt?: number | null;
+  duration: number;
+  views: number;
+  likes: number;
+  comments: number;
+}
+
+export interface ExtChannel {
+  id: string;
+  key: string;
+  title: string;
+  handle: string;
+  thumb?: string;
+  subscribers: number;
+  views: number;
+  videoCount: number;
+  syncedAt: number;
+  history: { t: number; subs: number; views: number }[];
+  videos: ChannelVideo[];
+}
+
 export interface Activity {
   t: number;
   type: string;
@@ -108,6 +135,7 @@ export interface State {
   platforms: Platform[];
   videos: Video[];
   activity: Activity[];
+  channels?: ExtChannel[];
 }
 
 export interface Forecast {

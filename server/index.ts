@@ -46,7 +46,7 @@ const act = (action: Action) =>
 
 setInterval(() => void serial(async () => { tick(state, Date.now()); await saveState(state); }), 60_000).unref();
 
-const ACTIONS = new Set<Action['type']>(['video.create', 'video.update', 'video.move', 'video.check', 'video.delete', 'post.schedule', 'post.reschedule', 'post.remove', 'post.retry', 'post.publishNow', 'post.published', 'post.failed', 'post.stats', 'platform.update', 'goals.update', 'workspace.update']);
+const ACTIONS = new Set<Action['type']>(['video.create', 'video.update', 'video.move', 'video.check', 'video.delete', 'post.schedule', 'post.reschedule', 'post.remove', 'post.retry', 'post.publishNow', 'post.published', 'post.failed', 'post.stats', 'platform.update', 'channel.sync', 'goals.update', 'workspace.update']);
 
 const api = new Hono()
   // ADMIN_TOKEN o'rnatilgan bo'lsa butun API (o'qish ham) token so'raydi; /health ochiq qoladi (hosting tekshiruvi uchun).

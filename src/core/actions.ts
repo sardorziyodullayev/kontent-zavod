@@ -2,7 +2,7 @@
 import { CHECKLIST, PLATFORM_IDS, TOPICS, pname, stageName } from './constants';
 import { fmtDate, fmtTime } from './format';
 import { emptyChecklist, emptyScript, followersAt, log, readiness, tick } from './model';
-import type { ChecklistKey, Format, Goals, PlatformId, Post, Script, Stage, State, Stats, Video, Workspace } from './types';
+import type { ChecklistKey, ExtChannel, Format, Goals, PlatformId, Post, Script, Stage, State, Stats, Video, Workspace } from './types';
 
 export type Action =
   | { type: 'video.create'; payload: { title?: string; topic?: string; format?: Format; duration?: number; status?: Stage; owner?: string; hook?: string; notes?: string } }
@@ -19,6 +19,7 @@ export type Action =
   | { type: 'post.failed'; payload: { postId: string; error?: string } }
   | { type: 'post.stats'; payload: { postId: string; t?: number; stats: Partial<Stats> } }
   | { type: 'platform.update'; payload: { id: PlatformId; patch: { handle?: string; connected?: boolean; followers?: number } } }
+  | { type: 'channel.sync'; payload: Omit<ExtChannel, 'history' | 'syncedAt'> }
   | { type: 'goals.update'; payload: Partial<Goals> }
   | { type: 'workspace.update'; payload: Partial<Workspace> };
 
@@ -176,6 +177,21 @@ export function applyAction(state: State, action: Action, now = Date.now()): unk
       }
       if (patch.followers != null) pl.manualDelta = (pl.manualDelta ?? 0) + Number(patch.followers) - followersAt(state, pl.id, now);
       return pl;
+    }
+    case 'channel.sync': {
+      const c = action.payload;
+      if (!c.id || !c.key) throw new ActionError('Kanal id/key kerak');
+      state.channels ??= [];
+      let ch = state.channels.find((x) => x.key === c.key);
+      if (!ch) {
+        ch = { ...c, syncedAt: now, history: [] };
+        state.channels.push(ch);
+        log(state, now, 'connect', `${c.title} kanali kuzatuvga qo‘shildi`);
+      } else Object.assign(ch, c, { syncedAt: now });
+      // tarix: o'zgarganda yoki 6 soatda bir nuqta, eng ko'pi 1000 ta
+      const last = ch.history.at(-1);
+      if (!last || last.subs !== c.subscribers || last.views !== c.views || now - last.t >= 6 * 3600e3) ch.history = [...ch.history, { t: now, subs: c.subscribers, views: c.views }].slice(-1000);
+      return ch;
     }
     case 'goals.update': {
       const g = action.payload;

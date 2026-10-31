@@ -29,7 +29,7 @@ export async function initDb() {
 export async function loadState(): Promise<State | null> {
   const metaRows = await db.select().from(schema.meta);
   if (!metaRows.length) return null;
-  const m = Object.fromEntries(metaRows.map((r) => [r.key, r.value])) as { seededAt: number; nextId: State['nextId']; workspace: Workspace; goals: Goals; updatedAt?: number };
+  const m = Object.fromEntries(metaRows.map((r) => [r.key, r.value])) as { seededAt: number; nextId: State['nextId']; workspace: Workspace; goals: Goals; updatedAt?: number; channels?: State['channels'] };
   const [vRows, pRows, plRows, aRows] = await Promise.all([
     db.select().from(schema.videos).orderBy(asc(schema.videos.ord)),
     db.select().from(schema.posts).orderBy(asc(schema.posts.ord)),
@@ -51,6 +51,7 @@ export async function loadState(): Promise<State | null> {
     platforms: plRows,
     videos: vRows.map(({ ord: _o, ...v }) => ({ ...v, posts: byVideo.get(v.id) ?? [] })),
     activity: aRows.map(({ t, type, text }) => ({ t, type, text })),
+    ...(m.channels?.length ? { channels: m.channels } : {}),
   };
 }
 
@@ -71,6 +72,7 @@ export async function saveState(s: State) {
       { key: 'nextId', value: s.nextId },
       { key: 'workspace', value: s.workspace },
       { key: 'goals', value: s.goals },
+      ...(s.channels?.length ? [{ key: 'channels', value: s.channels }] : []),
     ]);
     if (s.platforms.length) await tx.insert(schema.platforms).values(s.platforms.map((p) => ({ ...p, manualDelta: p.manualDelta ?? 0 })));
     const vRows = s.videos.map(({ posts: _p, ...v }, ord) => ({ ...v, ord, viral: !!v.viral }));

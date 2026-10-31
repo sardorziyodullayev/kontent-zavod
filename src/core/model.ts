@@ -194,6 +194,7 @@ export function emptyState(now = Date.now(), from?: State, keep: Video[] = []): 
     workspace: { name: from?.workspace.name ?? 'PixelMind', timezone: 'Asia/Tashkent', autoPublish: false },
     goals: { monthlySubs: 1000, monthlyViews: 100000, weeklyVideos: 3 },
     platforms, videos: structuredClone(keep), activity: [],
+    ...(from?.channels ? { channels: structuredClone(from.channels) } : {}),
   };
   log(state, now, 'milestone', 'Panel haqiqiy ishga tayyorlandi: namunaviy ma’lumotlar tozalandi');
   return state;
