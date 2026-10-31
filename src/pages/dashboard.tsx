@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowRight, Calendar, Film, Play, Plus } from 'lucide-react';
+import { ArrowRight, Calendar, Eye, Film, Heart, Play, Plus, Send, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   CHECKLIST, DAY, MONTHS_FULL, PLATFORMS, PLATFORM_IDS, TZ_OFFSET, allPosts, bestSlots, countdown, dailySeries, dayStart, fmtDate, fmtFull, fmtNum, fmtTime,
@@ -132,11 +132,11 @@ function Kpis({ state, now }: { state: State; now: number }) {
   }, [state, now, period, pf]); // eslint-disable-line react-hooks/exhaustive-deps
   const foot = `oldingi ${period} kunga`;
   return (
-    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <StatTile label="Ko‘rishlar" title={fmtFull(d.k.cur.views)} value={fmtNum(d.k.cur.views)} delta={<Delta cur={d.k.cur.views} prev={d.k.prev.views} />} foot={foot} spark={<Sparkline values={d.views} />} />
-      <StatTile label="Yangi obunachilar" title={fmtFull(d.k.cur.subs)} value={`+${fmtNum(d.k.cur.subs)}`} delta={<Delta cur={d.k.cur.subs} prev={d.k.prev.subs} />} foot={foot} spark={<Sparkline values={d.subs} />} />
-      <StatTile label="Joylashlar" value={fmtFull(d.k.cur.posts)} delta={<Delta cur={d.k.cur.posts} prev={d.k.prev.posts} />} foot={foot} spark={<Sparkline values={d.posts} />} />
-      <StatTile label="O‘rtacha ER" value={`${(d.k.cur.er * 100).toFixed(1)}%`} delta={<Delta cur={d.k.cur.er} prev={d.k.prev.er} />} foot={foot} spark={<span className="max-w-[110px] text-right text-[11px] text-muted">layk+izoh+ulashish+saqlash / ko‘rish</span>} />
+    <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <StatTile accent icon={Eye} label="Ko‘rishlar" title={fmtFull(d.k.cur.views)} value={fmtNum(d.k.cur.views)} delta={<Delta cur={d.k.cur.views} prev={d.k.prev.views} />} foot={foot} spark={<Sparkline values={d.views} color="var(--accent-ink)" accent="var(--accent-ink)" />} />
+      <StatTile icon={UserPlus} label="Yangi obunachilar" title={fmtFull(d.k.cur.subs)} value={`+${fmtNum(d.k.cur.subs)}`} delta={<Delta cur={d.k.cur.subs} prev={d.k.prev.subs} />} foot={foot} spark={<Sparkline values={d.subs} />} />
+      <StatTile icon={Send} label="Joylashlar" value={fmtFull(d.k.cur.posts)} delta={<Delta cur={d.k.cur.posts} prev={d.k.prev.posts} />} foot={foot} spark={<Sparkline values={d.posts} />} />
+      <StatTile icon={Heart} label="O‘rtacha ER" title="layk + izoh + ulashish + saqlash / ko‘rish" value={`${(d.k.cur.er * 100).toFixed(1)}%`} delta={<Delta cur={d.k.cur.er} prev={d.k.prev.er} />} foot={foot} />
     </div>
   );
 }
@@ -297,13 +297,16 @@ export function DashboardPage() {
   const now = useNow(60_000);
   return (
     <>
-      <FactoryNow data={data} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[13px] font-medium text-muted">Umumiy ko‘rsatkichlar</h2>
+        <PeriodFilters />
+      </div>
+      <Kpis state={state} now={now} />
+      <div className="mt-4"><FactoryNow data={data} /></div>
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
         <NextVideo state={state} now={now} />
         <AlertsCard state={state} now={now} limit={4} />
       </div>
-      <div className="mt-4"><PeriodFilters /></div>
-      <Kpis state={state} now={now} />
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"><ViewsChart state={state} now={now} /><PlatformShare state={state} now={now} /></div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2"><Upcoming state={state} now={now} /><Recent state={state} now={now} /></div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2"><Goals state={state} now={now} /><Activity state={state} now={now} /></div>

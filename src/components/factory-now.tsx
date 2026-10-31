@@ -8,6 +8,7 @@ import { openVideo } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { PChips } from './bits';
 import { BRAND } from './brand';
+import { buttonClass } from './ui/button';
 import { Card } from './ui/primitives';
 
 type Mode = { label: string; sub: string; tone: 'live' | 'sim' | 'demo' };
@@ -20,12 +21,15 @@ function modeOf(data: AppData): Mode {
 export function AutopilotBadge({ data }: { data: AppData }) {
   const m = modeOf(data);
   return (
-    <div className="flex items-center gap-2.5 rounded-[10px] border border-line bg-surface p-2.5">
-      <span className={cn('pm-live size-2.5 shrink-0 rounded-[3px]', m.tone === 'live' ? 'bg-accent' : m.tone === 'sim' ? 'bg-warning' : 'bg-muted')} />
-      <div className="min-w-0 leading-tight">
-        <div className="truncate text-[12.5px] font-semibold">{m.label}</div>
-        <div className="truncate text-[11px] text-muted">{BRAND.handle} · {m.sub}</div>
+    <div className="rounded-[20px] bg-surface-2 p-4">
+      <div className="flex items-center gap-2.5">
+        <span className={cn('grid size-8 shrink-0 place-items-center rounded-[10px]', m.tone === 'live' ? 'bg-accent' : 'bg-surface-3')}>
+          <span className={cn('pm-live size-2.5 rounded-[3px]', m.tone === 'live' ? 'bg-accent-ink' : m.tone === 'sim' ? 'bg-warning' : 'bg-muted')} />
+        </span>
+        <div className="min-w-0 truncate text-[13.5px] font-semibold">{m.label}</div>
       </div>
+      <p className="mt-2 text-[12px] leading-snug text-muted">{BRAND.handle} · {m.sub}</p>
+      <Link to="/konveyer" className={buttonClass('dark', 'sm', 'mt-3 w-full justify-center')}>Konveyerni ochish</Link>
     </div>
   );
 }

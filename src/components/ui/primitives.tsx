@@ -20,7 +20,7 @@ const dot: Record<Tone, string> = { neutral: '', good: 'bg-good', warning: 'bg-w
 
 export function Tag({ tone = 'neutral', children, className, title }: { tone?: Tone; children: ReactNode; className?: string; title?: string }) {
   return (
-    <span title={title} className={cn('inline-flex items-center gap-[5px] rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap', tone === 'accent' ? 'border-transparent bg-accent-wash text-accent-text' : 'border-line bg-surface-2 text-ink-2', className)}>
+    <span title={title} className={cn('inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-xs font-medium whitespace-nowrap', tone === 'accent' ? 'bg-accent-wash text-accent-text' : 'bg-surface-2 text-ink-2', className)}>
       {tone !== 'neutral' && <span className={cn('size-1.5 rounded-full', dot[tone])} />}
       {children}
     </span>
@@ -30,17 +30,17 @@ export function Tag({ tone = 'neutral', children, className, title }: { tone?: T
 export function Meter({ value, tone = 'accent', className }: { value: number; tone?: 'accent' | 'warn' | 'crit'; className?: string }) {
   const color = tone === 'crit' ? 'bg-critical' : tone === 'warn' ? 'bg-warning' : 'bg-accent';
   return (
-    <div className={cn('h-2 overflow-hidden rounded bg-surface-3', className)} role="meter" aria-valuenow={Math.round(value * 100)} aria-valuemin={0} aria-valuemax={100}>
-      <i className={cn('block h-full rounded', color)} style={{ width: `${Math.max(0, Math.min(100, value * 100)).toFixed(1)}%` }} />
+    <div className={cn('h-2 overflow-hidden rounded-full bg-surface-3', className)} role="meter" aria-valuenow={Math.round(value * 100)} aria-valuemin={0} aria-valuemax={100}>
+      <i className={cn('block h-full rounded-full', color)} style={{ width: `${Math.max(0, Math.min(100, value * 100)).toFixed(1)}%` }} />
     </div>
   );
 }
 
 export function Segmented<T extends string | number>({ value, options, onChange, label }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex rounded-[10px] border border-line bg-surface-2 p-[3px]">
+    <div role="group" aria-label={label} className="inline-flex rounded-full bg-surface p-1 shadow-card">
       {options.map((o) => (
-        <button key={String(o.value)} aria-pressed={value === o.value} onClick={() => onChange(o.value)} className={cn('rounded-[7px] px-[11px] py-[5px] text-[13px] font-medium text-ink-2', value === o.value && 'bg-surface text-ink shadow-sm')}>
+        <button key={String(o.value)} aria-pressed={value === o.value} onClick={() => onChange(o.value)} className={cn('rounded-full px-3.5 py-[6px] text-[13px] font-medium text-ink-2 hover:text-ink', value === o.value && 'bg-pill text-pill-ink hover:text-pill-ink')}>
           {o.label}
         </button>
       ))}

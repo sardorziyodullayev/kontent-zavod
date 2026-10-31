@@ -37,15 +37,23 @@
   --seq-5: #6da7ec;
   --seq-6: #9ec5f4;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  /* kartalar: yumshoq, katta radius; trend "pill"lari qora fonda */
+  --card-border: #22221f;
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+  --pill: #2a2a26;
+  --pill-ink: #f0efec;
+  --pill-up: #d4ff3a;
+  --pill-down: #ff8a7a;
+  --page-grad: linear-gradient(180deg, #10100e 0%, #0b0b0a 420px);
 }
 :root[data-theme='light'] {
   color-scheme: light;
-  --page: #f2f1ec;
-  --surface: #fcfcfb;
-  --surface-2: #f4f3ef;
-  --surface-3: #e9e8e2;
-  --line: #e1e0d9;
-  --line-2: #c3c2b7;
+  --page: #f1efe9;
+  --surface: #ffffff;
+  --surface-2: #f5f4ef;
+  --surface-3: #eae8e1;
+  --line: #ecebe5;
+  --line-2: #d3d1c8;
   --text: #0b0b0b;
   --text-2: #52514e;
   --muted: #7a7973;
@@ -66,6 +74,11 @@
   --seq-5: #256abf;
   --seq-6: #184f95;
   --shadow: 0 12px 40px rgba(30, 30, 20, 0.14);
+  --card-border: transparent;
+  --card-shadow: 0 1px 2px rgba(40, 36, 20, 0.04), 0 10px 30px -14px rgba(40, 36, 20, 0.12);
+  --pill: #121210;
+  --pill-ink: #ffffff;
+  --page-grad: linear-gradient(180deg, #ecebe6 0%, #f4f0e7 60%, #f6efe1 100%);
 }
 
 @theme inline {
@@ -91,6 +104,11 @@
   --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Unbounded', 'Geist', system-ui, sans-serif;
   --shadow-pop: var(--shadow);
+  --shadow-card: var(--card-shadow);
+  --color-pill: var(--pill);
+  --color-pill-ink: var(--pill-ink);
+  --color-pill-up: var(--pill-up);
+  --color-pill-down: var(--pill-down);
 }
 
 @layer base {
@@ -98,6 +116,9 @@
   body {
     background: var(--page);
     color: var(--text);
+  }
+  body {
+    background: var(--page-grad) fixed, var(--page);
   }
   body {
     @apply font-sans text-sm antialiased;
@@ -110,17 +131,27 @@
   button:not(:disabled) {
     cursor: pointer;
   }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-2) transparent;
+  }
 }
 
 @layer components {
   .card {
-    @apply min-w-0 rounded-2xl border border-line bg-surface px-5 py-[18px];
+    @apply min-w-0 rounded-[22px] border border-[var(--card-border)] bg-surface p-5 shadow-card;
   }
   .card-title {
-    @apply font-display text-[13.5px] font-semibold tracking-tight;
+    @apply text-[15.5px] font-semibold tracking-[-0.015em];
   }
   .input {
-    @apply h-[38px] w-full rounded-[10px] border border-line-2 bg-surface-2 px-3 outline-none focus:border-ink-2;
+    @apply h-10 w-full rounded-xl border border-[var(--card-border)] bg-surface px-3.5 shadow-card outline-none placeholder:text-muted focus:border-line-2;
+  }
+  :is(.card, [role='dialog']) .input {
+    @apply border-transparent bg-surface-2 shadow-none focus:border-line-2 focus:bg-surface;
+  }
+  select.input {
+    @apply rounded-full pr-8;
   }
   textarea.input {
     @apply h-auto min-h-21 resize-y py-2.5 leading-normal;
@@ -129,13 +160,19 @@
     font-variant-numeric: tabular-nums;
   }
   .table {
-    @apply w-full border-collapse;
+    @apply w-full border-separate border-spacing-0;
   }
   .table th {
-    @apply border-b border-line px-2.5 py-2 text-left text-xs font-medium whitespace-nowrap text-muted;
+    @apply bg-surface-2 px-2.5 py-2.5 text-left text-xs font-medium whitespace-nowrap text-muted;
+  }
+  .table th:first-child {
+    @apply rounded-l-xl;
+  }
+  .table th:last-child {
+    @apply rounded-r-xl;
   }
   .table td {
-    @apply border-b border-line px-2.5 py-[11px] align-middle;
+    @apply border-b border-line px-2.5 py-3 align-middle;
     font-variant-numeric: tabular-nums;
   }
   .table tbody tr:last-child td {

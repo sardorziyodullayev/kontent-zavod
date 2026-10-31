@@ -1,4 +1,5 @@
 // Kichik domen komponentlari: platforma belgilari, holat teglari, muqova, delta, sparkline.
+import { ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { hashStr, pname, pshort, stageName, type PlatformId, type PostStatus, type Stage, type Video } from '@/core';
 import { cn } from '@/lib/utils';
@@ -47,8 +48,9 @@ export function Delta({ cur, prev, invert }: { cur: number; prev: number; invert
   const d = (cur - prev) / prev;
   const good = invert ? d < 0 : d >= 0;
   return (
-    <span className={cn('inline-flex items-center gap-[3px] text-[12.5px] font-semibold', good ? 'text-good-text' : 'text-critical-text')}>
-      {d >= 0 ? '▲' : '▼'} {Math.abs(d * 100).toFixed(1).replace('.0', '')}%
+    <span className="inline-flex items-center gap-1 rounded-full bg-pill py-[3px] pr-2 pl-1.5 text-[11.5px] font-semibold text-pill-ink tnum">
+      {d >= 0 ? <ArrowUpRight size={13} strokeWidth={2.5} className={good ? 'text-pill-up' : 'text-pill-down'} /> : <ArrowDownRight size={13} strokeWidth={2.5} className={good ? 'text-pill-up' : 'text-pill-down'} />}
+      {Math.abs(d * 100).toFixed(1).replace('.0', '')}%
     </span>
   );
 }
@@ -67,17 +69,20 @@ export function Sparkline({ values, w = 96, h = 28, color = 'var(--muted)', acce
   );
 }
 
-export function StatTile({ label, value, delta, foot, spark, title }: { label: string; value: ReactNode; delta?: ReactNode; foot?: ReactNode; spark?: ReactNode; title?: string }) {
+export function StatTile({ label, value, delta, foot, spark, title, icon: Icon, accent }: { label: string; value: ReactNode; delta?: ReactNode; foot?: ReactNode; spark?: ReactNode; title?: string; icon?: LucideIcon; accent?: boolean }) {
   return (
-    <Card className="grid gap-1" title={title}>
-      <div className="text-[12.5px] font-medium text-ink-2">{label}</div>
-      <div className="text-[30px] leading-[1.1] font-semibold tracking-[-0.025em] max-[520px]:text-[26px]">{value}</div>
-      <div className="mt-1.5 flex items-center justify-between gap-2">
-        <span className="text-[12.5px]">
-          {delta}
-          {foot && <span className="text-muted"> {foot}</span>}
-        </span>
-        {spark}
+    <Card className={cn('grid gap-3 max-sm:p-4', accent && 'border-transparent bg-accent text-accent-ink')} title={title}>
+      <div className="flex items-center gap-2.5">
+        {Icon && <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', accent ? 'bg-accent-ink/10' : 'bg-surface-2 text-ink-2')}><Icon size={17} /></span>}
+        <span className={cn('min-w-0 text-[13.5px] leading-tight font-medium max-sm:text-[12.5px]', accent ? 'text-accent-ink/75' : 'text-ink-2')}>{label}</span>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <div className="text-[34px] leading-none font-semibold tracking-[-0.035em] tnum max-[520px]:text-[26px]">{value}</div>
+        <span className="max-sm:hidden">{spark}</span>
+      </div>
+      <div className="flex min-h-[22px] flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+        {delta}
+        {foot && <span className={accent ? 'text-accent-ink/65' : 'text-muted'}>{foot}</span>}
       </div>
     </Card>
   );
@@ -85,7 +90,7 @@ export function StatTile({ label, value, delta, foot, spark, title }: { label: s
 
 export function MiniStat({ k, v }: { k: string; v: ReactNode }) {
   return (
-    <div className="rounded-[10px] bg-surface-2 px-3 py-2.5">
+    <div className="rounded-2xl bg-surface-2 px-3.5 py-3">
       <div className="text-[11.5px] text-muted">{k}</div>
       <div className="text-lg font-semibold tracking-[-0.01em]">{v}</div>
     </div>

@@ -22,4 +22,4 @@ export function PixelLogo({ size = 32, className, tile = true }: { size?: number
   );
 }
 
-export const BRAND = { name: 'PixelMind', product: 'PixelMind Studio', tagline: 'AI kontent zavodi', handle: '@pixelminduz' } as const;
+export const BRAND = { name: 'PixelMind', product: 'PixelMind Studio', tagline: 'AI kontent zavodi', handle: '@pixelminduz', owner: 'Sardor' } as const;

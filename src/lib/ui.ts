@@ -19,7 +19,7 @@ interface UI {
 
 let state: UI = {
   drawer: null, modal: null, palette: false, menu: false, period: 30, pf: 'all', hidden: {},
-  theme: (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark',
+  theme: (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'light',
 };
 const subs = new Set<() => void>();
 
