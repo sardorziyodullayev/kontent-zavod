@@ -45,6 +45,7 @@
   --pill-up: #d4ff3a;
   --pill-down: #ff8a7a;
   --page-grad: linear-gradient(180deg, #10100e 0%, #0b0b0a 420px);
+  --lane: rgba(255, 255, 255, 0.025);
 }
 :root[data-theme='light'] {
   color-scheme: light;
@@ -79,6 +80,7 @@
   --pill: #121210;
   --pill-ink: #ffffff;
   --page-grad: linear-gradient(180deg, #ecebe6 0%, #f4f0e7 60%, #f6efe1 100%);
+  --lane: rgba(110, 100, 70, 0.07);
 }
 
 @theme inline {
