@@ -1,6 +1,7 @@
-import { BarChart3, Calendar, Film, Home, PenLine, Plug, Settings, Workflow } from 'lucide-react';
+import { BarChart3, BriefcaseBusiness, Calendar, Film, Home, PenLine, Plug, Settings, Workflow } from 'lucide-react';
 
 export const NAV = [
+  { to: '/narxtop', name: 'Narxtop', sub: 'Ish beruvchi vazifalari, holati, to‘lovlar va Excel hisobot', icon: BriefcaseBusiness, group: 'Mijoz' },
   { to: '/', name: 'Boshqaruv', sub: 'Zavod hozir nima qilyapti, keyingi video va natijalar', icon: Home, group: 'Zavod' },
   { to: '/reja', name: 'Reja va kalendar', sub: 'Qachon nima chiqadi va tayyormi', icon: Calendar, group: 'Zavod' },
   { to: '/ssenariylar', name: 'Ssenariylar', sub: 'G‘oyadan joylashgacha ishlab chiqarish liniyasi', icon: PenLine, group: 'Zavod' },

@@ -10,6 +10,7 @@ import { account as igAccount, instagramConfigured, publishReel, refreshToken as
 import { channel, extChannel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 import { buildDigest } from '../src/core/digest';
 import { dayStart, localHour } from '../src/core/format';
+import { LINK_FAILED, NX_HELP, choiceKeyboard, createdText, linkedText, openTasksText, type Me, type NarxtopData, type Order } from '../src/core/narxtop';
 import { GIFT_MISSING, LEAD_PROMPT, LEAD_THANKS, OWNER_HELP, PUBLIC_MENU, PUBLIC_WELCOME, SERVICES_TEXT, approvalText, approvedText, awaitingApproval, leadText, nextFreeSlot, planText, postponedText, statsText } from '../src/core/bot';
 
 const API = process.env.PANEL_URL ?? 'http://localhost:4310';
@@ -176,7 +177,7 @@ async function dailyDigest() {
 const DATA_DIR = process.env.DATA_DIR ?? './data';
 const BOT_FILE = path.join(DATA_DIR, 'bot-state.json');
 const GIFT_FILE = process.env.GIFT_FILE ?? path.resolve('brand/30-sorov.pdf');
-type BotState = { asked: Record<string, true>; leadWait: number[] };
+type BotState = { asked: Record<string, true>; leadWait: number[]; nx?: Record<string, { text: string; files: { name: string; fileId: string }[] }> };
 const loadBot = (): BotState => { try { return { asked: {}, leadWait: [], ...JSON.parse(fs.readFileSync(BOT_FILE, 'utf8')) }; } catch { return { asked: {}, leadWait: [] }; } };
 const saveBot = (s: BotState) => { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(BOT_FILE, JSON.stringify(s)); mirrorSoon(BOT_FILE); };
 const html = (chat_id: number | string, text: string, extra: object = {}) => tg('sendMessage', { chat_id, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...extra });
@@ -233,15 +234,15 @@ async function approve(videoId: string) {
 type TgUser = { id: number; username?: string; first_name?: string; last_name?: string };
 type Update = {
   update_id: number;
-  message?: { message_id: number; chat: { id: number; type: string }; from?: TgUser; text?: string };
+  message?: { message_id: number; chat: { id: number; type: string }; from?: TgUser; text?: string; caption?: string; document?: { file_id: string; file_name?: string } };
   callback_query?: { id: string; from: TgUser; data?: string; message?: { message_id: number; chat: { id: number }; text?: string } };
 };
 
 let updateOffset = 0;
-async function pollBot() {
+async function pollBot(timeout = 0) {
   if (!process.env.TELEGRAM_BOT_TOKEN) return;
   const OWNER = process.env.TELEGRAM_OWNER_ID;
-  const updates = await tg<Update[]>('getUpdates', { offset: updateOffset, timeout: 0, allowed_updates: ['message', 'callback_query'] });
+  const updates = await tg<Update[]>('getUpdates', { offset: updateOffset, timeout, allowed_updates: ['message', 'callback_query'] });
   for (const u of updates) {
     updateOffset = u.update_id + 1;
     try {
@@ -254,6 +255,7 @@ async function pollBot() {
 async function onCallback(q: NonNullable<Update['callback_query']>, OWNER?: string) {
   const data = q.data ?? '', chat = q.message?.chat.id ?? q.from.id, isOwner = String(q.from.id) === OWNER;
   await tg('answerCallbackQuery', { callback_query_id: q.id });
+  if (data.startsWith('nx:')) return nxCallback(q, data);
   if (isOwner && (data.startsWith('ok:') || data.startsWith('no:'))) {
     const id = data.slice(3);
     const result = data.startsWith('ok:') ? await approve(id) : postponedText((await api<{ state: State }>('/api/state')).state.videos.find((v) => v.id === id)?.title ?? id);
@@ -275,8 +277,10 @@ async function onCallback(q: NonNullable<Update['callback_query']>, OWNER?: stri
 }
 
 async function onMessage(m: NonNullable<Update['message']>, OWNER?: string) {
-  if (!m.text || m.chat.type !== 'private') return;
+  if (m.chat.type !== 'private') return;
   const isOwner = String(m.chat.id) === OWNER;
+  if (await nxMessage(m, isOwner)) return;
+  if (!m.text) return;
   const cmd = m.text.trim().split(/[\s@]/)[0];
   if (isOwner) {
     if (cmd === '/hisobot' || cmd === '/start') await sendDigest(m.chat.id);
@@ -310,7 +314,7 @@ async function runOnce() {
   await syncYoutube().catch((e: Error) => console.error(e.message));
   await syncInstagram().catch((e: Error) => console.error(e.message));
   await syncChannels().catch((e: Error) => console.error(e.message));
-  await pollBot().catch((e: Error) => console.error(e.message));
+  if (ONCE) await pollBot().catch((e: Error) => console.error(e.message));
   await dailyDigest().catch((e: Error) => console.error(e.message));
   await askApprovals().catch((e: Error) => console.error(e.message));
   const queue = await api<QueueItem[]>('/api/queue');
@@ -333,7 +337,95 @@ async function runOnce() {
   }
 }
 
+// ---------- Narxtop: ish beruvchi ssenariyni botga yuboradi → panelda vazifa ----------
+const nxUsers = new Map<number, { me: Me | null; t: number }>();
+async function nxUser(tgId: number): Promise<Me | null> {
+  const hit = nxUsers.get(tgId);
+  if (hit && Date.now() - hit.t < 60_000) return hit.me;
+  const me = await api<Me | null>(`/api/users/by-tg/${tgId}`);
+  nxUsers.set(tgId, { me, t: Date.now() });
+  return me;
+}
+const nxData = () => api<NarxtopData>('/api/narxtop');
+const PANEL_PUBLIC = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '';
+
+async function nxSendReport(chat: number) {
+  const r = await fetch(API + '/api/narxtop/report.xlsx', { headers });
+  if (!r.ok) throw new Error('hisobot: ' + r.status);
+  const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? 'narxtop-hisobot.xlsx');
+  const form = new FormData();
+  form.append('chat_id', String(chat));
+  form.append('caption', '📊 Narxtop hisoboti (joriy oy)');
+  form.append('document', new Blob([await r.arrayBuffer()]), name);
+  const res = await (await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: 'POST', body: form })).json();
+  if (!res.ok) throw new Error('sendDocument: ' + res.description);
+}
+
+async function nxCreate(chat: number, tgId: number, text: string, files: { name: string; fileId: string }[], replyTo?: number) {
+  const o = await api<Order>('/api/narxtop/tg/order', { tgId: String(tgId), text, files });
+  const d = await nxData();
+  await html(chat, createdText(o, 'direction'), { reply_markup: choiceKeyboard('d', o.id, d.directions), ...(replyTo ? { reply_parameters: { message_id: replyTo, allow_sending_without_reply: true } } : {}) });
+}
+
+/** true — xabar Narxtop uchun ishlandi. Ulangan foydalanuvchi (mijoz) matni darhol vazifa bo'ladi; egasidan esa so'raladi. */
+async function nxMessage(m: NonNullable<Update['message']>, isOwner: boolean): Promise<boolean> {
+  const text = (m.text ?? m.caption ?? '').trim();
+  const cmd = text.split(/[\s@]/)[0];
+  if (cmd === '/start' && text.includes('link_')) {
+    const code = text.split('link_')[1]?.trim();
+    const r = await api<{ ok: boolean; me?: Me }>('/api/users/tg-link', { code, tgId: String(m.chat.id) });
+    nxUsers.delete(m.chat.id);
+    await html(m.chat.id, r.ok && r.me ? linkedText(r.me.name) : LINK_FAILED);
+    return true;
+  }
+  const me = await nxUser(m.chat.id).catch(() => null);
+  if (!me && !isOwner) return false;
+  if (cmd === '/vazifalar') { await html(m.chat.id, openTasksText(await nxData(), PANEL_PUBLIC)); return true; }
+  if (cmd === '/excel' || (!isOwner && cmd === '/hisobot')) { await nxSendReport(m.chat.id); return true; }
+  if (!isOwner && (cmd === '/start' || cmd === '/yordam' || cmd === '/help')) { await html(m.chat.id, NX_HELP); return true; }
+  if (cmd.startsWith('/')) return false; // egasining boshqa buyruqlari
+  const files = m.document ? [{ name: m.document.file_name ?? 'ssenariy', fileId: m.document.file_id }] : [];
+  if (!text && !files.length) return false;
+  if (me?.role === 'client') { await nxCreate(m.chat.id, m.chat.id, text, files, m.message_id); return true; }
+  // egasi (admin): tasodifiy xabar vazifa bo'lib ketmasin — tugma bilan so'raymiz
+  const bs = loadBot();
+  bs.nx = Object.fromEntries([...Object.entries(bs.nx ?? {}).slice(-19), [String(m.message_id), { text, files }]]);
+  saveBot(bs);
+  await html(m.chat.id, '📥 Shu xabarni Narxtop vazifasi qilib qo‘shaymi?', { reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, reply_markup: { inline_keyboard: [[{ text: '✅ Ha, qo‘sh', callback_data: `nx:add:${m.message_id}` }, { text: 'Yo‘q', callback_data: `nx:no:${m.message_id}` }]] } });
+  return true;
+}
+
+async function nxCallback(q: NonNullable<Update['callback_query']>, data: string) {
+  const chat = q.message?.chat.id ?? q.from.id, msg = q.message?.message_id;
+  const clear = () => msg && tg('editMessageReplyMarkup', { chat_id: chat, message_id: msg, reply_markup: { inline_keyboard: [] } });
+  const [, kind, a, b] = data.split(':');
+  if (kind === 'add' || kind === 'no') {
+    const bs = loadBot();
+    const item = bs.nx?.[a];
+    if (bs.nx) delete bs.nx[a];
+    saveBot(bs);
+    if (kind === 'no' || !item) { await clear(); if (msg) await tg('editMessageText', { chat_id: chat, message_id: msg, text: kind === 'no' ? 'Qo‘shilmadi.' : 'Xabar topilmadi, qayta yuboring.' }); return; }
+    if (msg) await tg('deleteMessage', { chat_id: chat, message_id: msg }).catch(() => undefined);
+    await nxCreate(chat, q.from.id, item.text, item.files, Number(a));
+    return;
+  }
+  if (kind !== 'd' && kind !== 's') return;
+  const d = await nxData();
+  const list = kind === 'd' ? d.directions : d.styles;
+  const idx = Number(b);
+  const o = idx >= 0 ? await api<Order>(`/api/narxtop/tg/order/${a}`, { tgId: String(q.from.id), [kind === 'd' ? 'direction' : 'style']: list[idx] }) : d.orders.find((x) => x.id === Number(a));
+  if (!o || !msg) return;
+  const next = kind === 'd' ? 'style' : 'done';
+  await tg('editMessageText', { chat_id: chat, message_id: msg, text: createdText(o, next), parse_mode: 'HTML', reply_markup: next === 'style' ? choiceKeyboard('s', o.id, d.styles) : { inline_keyboard: [] } });
+}
+
 console.log(`Worker: ${API} (har ${INTERVAL / 1000} s)`);
+// Bot alohida aylanishda: getUpdates 25 soniya kutib turadi, xabar kelishi bilan javob beradi.
+if (!ONCE && process.env.TELEGRAM_BOT_TOKEN) void (async () => {
+  for (;;) {
+    await pollBot(25).catch(async (e: Error) => { console.error('bot:', e.message); await new Promise((ok) => setTimeout(ok, 5000)); });
+  }
+})();
 // Keyingi aylanish oldingisi tugagandan keyin: Instagram/YouTube yuklash bir daqiqadan uzoq cho'zilsa,
 // setInterval bir postni ikki marta joylab yuborardi.
 for (;;) {

@@ -4,6 +4,7 @@ import { AnalyticsPage } from './pages/analytics';
 import { CalendarPage } from './pages/calendar';
 import { DashboardPage } from './pages/dashboard';
 import { FactoryPage } from './pages/factory';
+import { NarxtopRoute } from './components/shell';
 import { PlatformsPage } from './pages/platforms';
 import { ScriptsPage } from './pages/scripts';
 import { SettingsPage } from './pages/settings';
@@ -21,6 +22,7 @@ const routeTree = root.addChildren([
   r('/platformalar', PlatformsPage),
   r('/konveyer', FactoryPage),
   r('/sozlamalar', SettingsPage),
+  r('/narxtop', NarxtopRoute),
 ]);
 
 // Hash tarix: GitHub Pages kabi statik hostingda ham sahifalar ishlaydi.

@@ -70,3 +70,61 @@ export const files = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.path, t.idx] })],
 );
+
+// ---------- Narxtop bo'limi: foydalanuvchilar (login/parol), vazifalar, oylar va to'lovlar ----------
+export const users = sqliteTable('users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  login: text('login').notNull().unique(),
+  name: text('name').notNull(),
+  /** admin — butun panel; client — faqat Narxtop bo'limi */
+  role: text('role', { enum: ['admin', 'client'] }).notNull(),
+  passHash: text('pass_hash').notNull(),
+  /** parol o'zgarsa eski sessiyalar bekor bo'ladi */
+  ver: integer('ver').notNull().default(1),
+  tgId: text('tg_id'),
+  linkCode: text('link_code'),
+  linkExp: integer('link_exp'),
+  createdAt: integer('created_at').notNull(),
+});
+
+/** Ish oyi (shartnoma oyi): "1-oy", "2-oy"… Kelishilgan summa shu yerda. */
+export const periods = sqliteTable('periods', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  price: integer('price').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+});
+
+export type OrderLog = { t: number; who: string; text: string };
+export type OrderFile = { name: string; fileId: string };
+
+export const orders = sqliteTable(
+  'orders',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    periodId: integer('period_id').notNull().references(() => periods.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    direction: text('direction').notNull().default(''),
+    style: text('style').notNull().default(''),
+    status: text('status', { enum: ['new', 'work', 'review', 'fix', 'done'] }).notNull().default('new'),
+    script: text('script').notNull().default(''),
+    videoUrl: text('video_url').notNull().default(''),
+    note: text('note').notNull().default(''),
+    deadline: integer('deadline'),
+    createdAt: integer('created_at').notNull(),
+    doneAt: integer('done_at'),
+    createdBy: text('created_by').notNull().default(''),
+    source: text('source', { enum: ['panel', 'telegram', 'import'] }).notNull().default('panel'),
+    files: text('files', { mode: 'json' }).$type<OrderFile[]>().notNull().default([]),
+    log: text('log', { mode: 'json' }).$type<OrderLog[]>().notNull().default([]),
+  },
+  (t) => [index('orders_period_idx').on(t.periodId)],
+);
+
+export const payments = sqliteTable('payments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  periodId: integer('period_id').notNull().references(() => periods.id, { onDelete: 'cascade' }),
+  amount: integer('amount').notNull(),
+  paidAt: integer('paid_at').notNull(),
+  note: text('note').notNull().default(''),
+});

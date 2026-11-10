@@ -5,11 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
-import { bearerAuth } from 'hono/bearer-auth';
 import { HTTPException } from 'hono/http-exception';
 import { logger } from 'hono/logger';
 import { ActionError, applyAction, emptyState, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
+import { auth, requireUser, type Env } from './auth';
 import { initDb, loadState, saveState } from './db';
+import { narxtop } from './narxtop';
 import { restoreFiles, restoreStatus } from './files';
 import { media, publicMedia } from './media';
 
@@ -48,12 +49,12 @@ setInterval(() => void serial(async () => { tick(state, Date.now()); await saveS
 
 const ACTIONS = new Set<Action['type']>(['video.create', 'video.update', 'video.move', 'video.check', 'video.delete', 'post.schedule', 'post.reschedule', 'post.remove', 'post.retry', 'post.publishNow', 'post.published', 'post.failed', 'post.stats', 'platform.update', 'channel.sync', 'goals.update', 'workspace.update']);
 
-const api = new Hono()
-  // ADMIN_TOKEN o'rnatilgan bo'lsa butun API (o'qish ham) token so'raydi; /health ochiq qoladi (hosting tekshiruvi uchun).
-  .use('*', async (c, next) => {
-    if (!TOKEN || c.req.path.endsWith('/health')) return next();
-    return bearerAuth({ token: TOKEN, invalidTokenMessage: { error: 'Token noto‘g‘ri' }, noAuthenticationHeaderMessage: { error: 'Token kerak (Authorization: Bearer …)' } })(c, next);
-  })
+const api = new Hono<Env>()
+  // Butun API kirishni talab qiladi: login/parol sessiyasi yoki ADMIN_TOKEN (worker, skriptlar). /health va /auth/login ochiq.
+  // Mijoz (client) roli faqat /narxtop va /me ga kira oladi (server/auth.ts).
+  .use('*', requireUser)
+  .route('/', auth)
+  .route('/narxtop', narxtop)
   // --- panel uchun ---
   .get('/state', (c) => { tick(state, Date.now()); return c.json({ mode: 'server' as const, now: Date.now(), state }); })
   .post('/action', async (c) => {

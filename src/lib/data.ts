@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { applyAction, emptyState, seed, tick, type Action, type State } from '@/core';
+import type { Me, NarxtopData } from '@/core/narxtop';
 import { ls } from './utils';
 
 export type Mode = 'server' | 'demo';
@@ -151,4 +152,61 @@ export function uploadMedia(videoId: string, file: File, onProgress: (p: number)
 export async function deleteMedia(videoId: string) {
   const r = await fetch(`${API}/media/${videoId}`, { method: 'DELETE', headers: authHeader() });
   if (!r.ok) throw new Error('O‘chirilmadi');
+}
+
+// ---------- kirish (login/parol) va Narxtop bo'limi ----------
+
+/** Server API: JSON so'rov, xato bo'lsa server matni bilan Error. 401 — qayta kirish. */
+export async function apiCall<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const r = await fetch(`${API}${path}`, { method, cache: 'no-store', headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...authHeader() }, body: body !== undefined ? JSON.stringify(body) : undefined });
+  // sessiya tugagan yoki parol o'zgargan: kirish oynasiga qaytamiz (request() dagi kabi)
+  if (r.status === 401 && !path.startsWith('/auth/')) { logout(); location.reload(); throw new AuthError('Sessiya tugadi, qayta kiring'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j as { error?: string }).error ?? `Xato (${r.status})`);
+  return j as T;
+}
+
+export type MeInfo = Me & { via: 'session' | 'token' | 'local' };
+/** Kim kirgan. Demo (statik hosting) da null — panel odatdagidek ishlaydi. */
+export const useMe = () =>
+  useQuery({
+    queryKey: ['me'], staleTime: 5 * 60_000, retry: (n, e) => !(e instanceof AuthError) && n < 3,
+    queryFn: async (): Promise<MeInfo | null> => {
+      let r: Response;
+      try { r = await fetch(`${API}/me`, { cache: 'no-store', headers: authHeader() }); } catch { return null; }
+      if (r.status === 401) throw new AuthError(ls.get(LS_TOKEN) ? 'Login yoki parol eskirgan, qayta kiring' : undefined);
+      const j = r.ok ? await r.json().catch(() => null) : null;
+      return j && typeof j.role === 'string' ? j : null;
+    },
+  });
+
+export async function loginWithPassword(login: string, password: string) {
+  const j = await apiCall<{ token: string; me: Me }>('/auth/login', 'POST', { login, password });
+  saveToken(j.token);
+  return j.me;
+}
+
+export const useNarxtop = (enabled = true) =>
+  useQuery({ queryKey: ['narxtop'], enabled, queryFn: () => apiCall<NarxtopData>('/narxtop'), refetchInterval: 30_000, refetchOnWindowFocus: true, retry: (n, e) => !(e instanceof AuthError) && n < 2 });
+
+/** Narxtop o'zgarishi: so'rov, keyin ro'yxatni yangilash. */
+export function useNarxtopMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path, method = 'POST', body }: { path: string; method?: string; body?: unknown }) => apiCall<unknown>(`/narxtop${path}`, method, body ?? {}),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['narxtop'] }),
+  });
+}
+
+/** Himoyalangan faylni (Excel hisobot, ssenariy fayli) yuklab olish. */
+export async function downloadAuthed(path: string, fallback: string) {
+  const r = await fetch(`${API}${path}`, { headers: authHeader(), cache: 'no-store' });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Yuklab bo‘lmadi');
+  const cd = r.headers.get('Content-Disposition') ?? '';
+  const m = /filename\*=UTF-8''([^;]+)/.exec(cd);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(await r.blob());
+  a.download = m ? decodeURIComponent(m[1]) : fallback;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }

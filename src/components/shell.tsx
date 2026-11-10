@@ -1,8 +1,11 @@
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { Menu, Moon, Plus, Search, Sun } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { alerts, localHour } from '@/core';
-import { AuthError, useAppData, useNow, type AppData } from '@/lib/data';
+import { AuthError, useAppData, useMe, useNow, type AppData, type MeInfo } from '@/lib/data';
+import { NarxtopPage } from '@/pages/narxtop';
+import { ProfileCard } from './profile';
+import { Modal } from './ui/dialog';
 import { openModal, setTheme, setUI, useUI } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { CommandPalette } from './command-palette';
@@ -47,7 +50,50 @@ function Sidebar({ data }: { data: AppData }) {
   );
 }
 
+/** Kim kirganiga qarab: mijoz — faqat Narxtop bo'limi, admin — butun panel. */
 export function Shell() {
+  const me = useMe();
+  if (me.error instanceof AuthError) return <Login message={me.error.message} />;
+  if (me.isLoading) return <div className="p-10 text-muted">Yuklanmoqda…</div>;
+  if (me.data?.role === 'client') return <ClientShell me={me.data} />;
+  return <AdminShell me={me.data ?? null} />;
+}
+
+export function NarxtopRoute() {
+  const { data } = useMe();
+  return <NarxtopPage me={data ?? null} />;
+}
+
+/** Ish beruvchi uchun: menyusiz, bitta sahifa — Narxtop vazifalari. */
+function ClientShell({ me }: { me: MeInfo }) {
+  const theme = useUI((s) => s.theme);
+  const [profile, setProfile] = useState(false);
+  useEffect(() => { document.title = `Narxtop · ${BRAND.product}`; }, []);
+  return (
+    <div className="mx-auto min-h-screen max-w-[1400px] px-3 md:px-6">
+      <header className="sticky top-0 z-20 -mx-3 bg-gradient-to-b from-page via-page/90 to-transparent px-3 pt-3 pb-2 md:mx-0 md:px-0 md:pt-4">
+        <div className="flex items-center gap-3 rounded-[22px] border border-[var(--card-border)] bg-surface py-2.5 pr-2.5 pl-3 shadow-card md:py-3 md:pl-4">
+          <PixelLogo size={38} />
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-[17px] font-semibold tracking-[-0.02em] sm:text-[20px]">Narxtop</h1>
+            <div className="hidden truncate text-[12.5px] text-muted sm:block">AI videolar: vazifalar, holat va hisobot · {BRAND.name}</div>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button size="icon" className="max-sm:hidden" aria-label="Mavzuni almashtirish" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</Button>
+            <button className="flex items-center gap-2.5 rounded-full py-1 pr-3 pl-1 hover:bg-surface-2" onClick={() => setProfile(true)} aria-label="Profil">
+              <span className="grid size-9 place-items-center rounded-full bg-pill font-display text-[14px] font-semibold text-pill-ink">{me.name[0]?.toUpperCase()}</span>
+              <span className="hidden text-left leading-tight sm:block"><b className="block text-[13px] font-semibold">{me.name}</b><span className="text-[11.5px] text-muted">Profil va chiqish</span></span>
+            </button>
+          </div>
+        </div>
+      </header>
+      <main className="pt-3 pb-16 md:pt-4"><NarxtopPage me={me} /></main>
+      <Modal open={profile} onClose={() => setProfile(false)} title="Profil"><ProfileCard /></Modal>
+    </div>
+  );
+}
+
+function AdminShell({ me }: { me: MeInfo | null }) {
   const { data, error, isLoading } = useAppData();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const menu = useUI((s) => s.menu);
@@ -57,7 +103,6 @@ export function Shell() {
   const title = page.to === '/' ? `${h < 11 ? 'Xayrli tong' : h < 18 ? 'Xayrli kun' : 'Xayrli kech'}, ${BRAND.owner}` : page.name;
   useEffect(() => { document.title = `${page.name} · ${data?.state.workspace.name ?? BRAND.product}`; }, [page, data?.state.workspace.name]);
 
-  if (error instanceof AuthError) return <Login message={error.message} />;
   if (!data) return isLoading ?<div className="p-10 text-muted">Yuklanmoqda…</div> : <div className="p-10 text-critical-text">Ma’lumot yuklanmadi: {String(error)}</div>;
 
   return (
@@ -79,10 +124,10 @@ export function Shell() {
                 <Search size={17} className="max-lg:mx-auto" />
               </button>
               <Button size="icon" className="max-sm:hidden md:size-11" aria-label="Mavzuni almashtirish" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</Button>
-              <Button variant="primary" className="max-sm:w-10 max-sm:justify-center max-sm:px-0 md:h-11" onClick={() => openModal({ type: 'new' })} aria-label="Yangi video"><Plus size={17} /><span className="hidden sm:inline">Yangi video</span></Button>
+              {path !== '/narxtop' && <Button variant="primary" className="max-sm:w-10 max-sm:justify-center max-sm:px-0 md:h-11" onClick={() => openModal({ type: 'new' })} aria-label="Yangi video"><Plus size={17} /><span className="hidden sm:inline">Yangi video</span></Button>}
               <div className="ml-1 hidden items-center gap-2.5 border-l border-line pl-3 xl:flex">
-                <span className="grid size-10 place-items-center rounded-full bg-pill font-display text-[14px] font-semibold text-pill-ink">{BRAND.owner[0]}</span>
-                <span className="leading-tight"><b className="block text-[13px] font-semibold">{BRAND.owner}</b><span className="text-[11.5px] text-muted">{BRAND.handle}</span></span>
+                <span className="grid size-10 place-items-center rounded-full bg-pill font-display text-[14px] font-semibold text-pill-ink">{(me?.name && me.via === 'session' ? me.name : BRAND.owner)[0]}</span>
+                <span className="leading-tight"><b className="block text-[13px] font-semibold">{me?.name && me.via === 'session' ? me.name : BRAND.owner}</b><span className="text-[11.5px] text-muted">{BRAND.handle}</span></span>
               </div>
             </div>
           </div>

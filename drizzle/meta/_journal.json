@@ -15,6 +15,13 @@
       "when": 1792694884010,
       "tag": "0001_purple_loners",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794322014768,
+      "tag": "0002_fancy_frog_thor",
+      "breakpoints": true
     }
   ]
 }
