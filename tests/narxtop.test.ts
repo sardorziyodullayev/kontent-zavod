@@ -35,7 +35,7 @@ describe('narxtop', () => {
       order({ id: 3, direction: 'MFO', status: 'fix' }),
       order({ id: 4, status: 'new' }),
     ];
-    const s = N.summarize(os, { id: 1, name: '2-oy', price: 5_000_000, createdAt: 0 }, [
+    const s = N.summarize(os, { id: 1, name: '2-oy', price: 5_000_000, createdAt: 0, closedAt: null }, [
       { id: 1, periodId: 1, amount: 3_000_000, paidAt: 0, note: '' },
       { id: 2, periodId: 1, amount: 1_300_000, paidAt: 0, note: '' },
     ]);
@@ -48,7 +48,7 @@ describe('narxtop', () => {
 
   test('bot: bajarilmagan vazifalar ro‘yxati va tugmalar', () => {
     const d: N.NarxtopData = {
-      periods: [{ id: 1, name: '1-oy', price: 0, createdAt: 0 }, { id: 2, name: '2-oy', price: 0, createdAt: 1 }],
+      periods: [{ id: 1, name: '1-oy', price: 0, createdAt: 0, closedAt: 1 }, { id: 2, name: '2-oy', price: 0, createdAt: 1, closedAt: null }],
       orders: [order({ id: 1, periodId: 1, title: 'Eski' }), order({ id: 2, periodId: 2, title: 'Serial <7>', status: 'work' }), order({ id: 3, periodId: 2, status: 'done' })],
       payments: [], directions: N.DEFAULT_DIRECTIONS, styles: N.DEFAULT_STYLES, bot: null,
     };

@@ -54,13 +54,28 @@ async function main() {
   };
   for (const b of blocks) {
     const p = await post<{ id: number }>('/periods', { name: b.name, price: 0 });
+    // yangi oy ochilganda oldingilari avtomatik yakunlanadi; 2-oy ochiq qolishi uchun to'lov bo'limida aniq belgilanadi
     for (const it of b.items) {
       await post('/orders', { title: it.title, direction: it.direction, style: it.style, status: it.status, periodId: p.id, source: 'import' });
     }
-    // To'lov matnlari erkin yozilgan: summalarni avtomatik taxmin qilmaymiz, izoh sifatida qoldiramiz — panelda qo'lda kiritiladi.
+    // To'lov matnlari jadvalda erkin yozilgan — qiymatlar shu matnlardan qo'lda olindi (sanasi noma'lum bo'lsa paidAt: 0):
+    //  1-oy: "Оплата за 1 месяц - оплачен полностью 5.000.000 сум"
+    //  2-oy: "Предоплата 3 млн сум" + "Оплачено 20 октября 1 300 000 осталось 1 000 000 сум" → oy summasi 5 300 000
+    const PAY: Record<string, { price: number; pays: { amount: number; paidAt: number; note: string }[]; closed: boolean }> = {
+      '1-oy': { price: 5_000_000, closed: true, pays: [{ amount: 5_000_000, paidAt: 0, note: 'To‘liq to‘langan (jadvaldan, sana yozilmagan)' }] },
+      '2-oy': { price: 5_300_000, closed: false, pays: [
+        { amount: 3_000_000, paidAt: 0, note: 'Avans (jadvaldan, sana yozilmagan)' },
+        { amount: 1_300_000, paidAt: Date.parse('2026-10-20T12:00:00+05:00'), note: '20-oktabr (jadvaldan)' },
+      ] },
+    };
+    const pay = PAY[b.name];
+    if (pay) {
+      await post(`/periods/${p.id}`, { price: pay.price, ...(pay.closed ? { closed: true } : {}) }, 'PATCH');
+      for (const x of pay.pays) await post('/payments', { periodId: p.id, ...x });
+    }
     console.log(`✓ ${b.name}: ${b.items.length} ta vazifa yozildi`);
   }
-  console.log('Tayyor. To‘lov summalarini panelda “To‘lovlar” kartasida kiriting:', blocks.flatMap((b) => b.notes.map((n) => `${b.name}: ${n}`)).join(' | '));
+  console.log('Tayyor. Jadvaldagi to‘lov yozuvlari:', blocks.flatMap((b) => b.notes.map((n) => `${b.name}: ${n}`)).join(' | '));
 }
 
 await main();

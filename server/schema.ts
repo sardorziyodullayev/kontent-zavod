@@ -93,6 +93,8 @@ export const periods = sqliteTable('periods', {
   name: text('name').notNull(),
   price: integer('price').notNull().default(0),
   createdAt: integer('created_at').notNull(),
+  /** oy yakunlangan vaqt; null — joriy (ochiq) oy */
+  closedAt: integer('closed_at'),
 });
 
 export type OrderLog = { t: number; who: string; text: string };

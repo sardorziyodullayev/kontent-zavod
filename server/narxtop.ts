@@ -1,6 +1,6 @@
 // Narxtop bo'limi API: vazifalar, ish oylari, to'lovlar, Excel hisobot va bot uchun kirish nuqtalari.
 import ExcelJS from 'exceljs';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, normalizeDirection, normalizeStyle, statusName, statusRu, summarize, titleFrom, type NarxtopData, type Order, type OrderStatus } from '../src/core/narxtop';
@@ -24,6 +24,8 @@ export async function loadAll(): Promise<NarxtopData> {
 }
 
 async function currentPeriodId(): Promise<number> {
+  const [cur] = await db.select().from(periods).where(isNull(periods.closedAt)).orderBy(desc(periods.id)).limit(1);
+  if (cur) return cur.id;
   const [last] = await db.select().from(periods).orderBy(desc(periods.id)).limit(1);
   if (last) return last.id;
   const [p] = await db.insert(periods).values({ name: '1-oy', price: 0, createdAt: Date.now() }).returning();
@@ -130,7 +132,7 @@ export async function buildReport(periodId: number | 'all'): Promise<{ buf: Buff
     const os = d.orders.filter((o) => o.periodId === p.id), pays = d.payments.filter((x) => x.periodId === p.id);
     const s = summarize(os, p, pays);
     sum.addRow([]);
-    sum.addRow([p.name]).font = { bold: true, size: 13 };
+    sum.addRow([p.name + (p.closedAt ? ` — завершён ${fmtD(p.closedAt)}` : ' — текущий')]).font = { bold: true, size: 13 };
     sum.addRow(['Всего видео', s.total]); sum.addRow(['Готово', s.done]); sum.addRow(['В работе', s.open]);
     sum.addRow([]);
     head(sum, sum.addRow(['Направление', 'Всего', 'Готово', 'Осталось']).number);
@@ -189,12 +191,15 @@ export const narxtop = new Hono<Env>()
     const b = await c.req.json<{ name?: string; price?: unknown }>();
     const name = String(b.name ?? '').trim();
     if (!name) throw new HTTPException(400, { message: 'Oy nomini yozing' });
-    const [p] = await db.insert(periods).values({ name, price: money(b.price ?? 0), createdAt: Date.now() }).returning();
+    const now = Date.now();
+    const [p] = await db.insert(periods).values({ name, price: money(b.price ?? 0), createdAt: now }).returning();
+    await db.update(periods).set({ closedAt: now }).where(and(ne(periods.id, p.id), isNull(periods.closedAt)));
     return c.json(p, 201);
   })
   .patch('/periods/:id', async (c) => {
-    const b = await c.req.json<{ name?: string; price?: unknown }>();
+    const b = await c.req.json<{ name?: string; price?: unknown; closed?: boolean }>();
     const patch: Partial<typeof periods.$inferInsert> = {};
+    if (b.closed !== undefined) patch.closedAt = b.closed ? Date.now() : null;
     if (b.name?.trim()) patch.name = b.name.trim();
     if (b.price !== undefined) patch.price = money(b.price);
     if (Object.keys(patch).length) await db.update(periods).set(patch).where(eq(periods.id, Number(c.req.param('id'))));
@@ -205,7 +210,7 @@ export const narxtop = new Hono<Env>()
     const b = await c.req.json<{ periodId?: number; amount?: unknown; paidAt?: number; note?: string }>();
     const amount = money(b.amount);
     if (!amount) throw new HTTPException(400, { message: 'Summani yozing' });
-    const [p] = await db.insert(payments).values({ periodId: Number(b.periodId) || (await currentPeriodId()), amount, paidAt: Number(b.paidAt) || Date.now(), note: String(b.note ?? '').trim() }).returning();
+    const [p] = await db.insert(payments).values({ periodId: Number(b.periodId) || (await currentPeriodId()), amount, paidAt: b.paidAt === 0 ? 0 : Number(b.paidAt) || Date.now(), note: String(b.note ?? '').trim() }).returning();
     return c.json(p, 201);
   })
   .delete('/payments/:id', async (c) => { await db.delete(payments).where(eq(payments.id, Number(c.req.param('id')))); return c.json({ ok: true }); })

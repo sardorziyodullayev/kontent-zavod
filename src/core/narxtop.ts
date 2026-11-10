@@ -4,7 +4,7 @@ export type OrderStatus = 'new' | 'work' | 'review' | 'fix' | 'done';
 export type Role = 'admin' | 'client';
 
 export interface Me { id: number; login: string; name: string; role: Role; tgLinked: boolean }
-export interface Period { id: number; name: string; price: number; createdAt: number }
+export interface Period { id: number; name: string; price: number; createdAt: number; closedAt: number | null }
 export interface Payment { id: number; periodId: number; amount: number; paidAt: number; note: string }
 export interface OrderLog { t: number; who: string; text: string }
 export interface Order {
@@ -101,7 +101,7 @@ export const LINK_FAILED = '❌ Havola eskirgan yoki noto‘g‘ri. Paneldagi �
 
 /** /vazifalar: joriy oydagi bajarilmagan vazifalar, holat bo'yicha guruhlab. */
 export function openTasksText(d: NarxtopData, panelUrl = ''): string {
-  const p = d.periods[d.periods.length - 1];
+  const p = [...d.periods].reverse().find((x) => !x.closedAt) ?? d.periods[d.periods.length - 1];
   if (!p) return 'Hali vazifa yo‘q.';
   const os = d.orders.filter((o) => o.periodId === p.id);
   const num = new Map(os.map((o, i) => [o.id, i + 1]));

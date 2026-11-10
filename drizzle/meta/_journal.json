@@ -22,6 +22,13 @@
       "when": 1794322014768,
       "tag": "0002_fancy_frog_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794324304752,
+      "tag": "0003_public_karen_page",
+      "breakpoints": true
     }
   ]
 }

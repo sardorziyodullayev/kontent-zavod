@@ -376,6 +376,13 @@ async function nxMessage(m: NonNullable<Update['message']>, isOwner: boolean): P
     const r = await api<{ ok: boolean; me?: Me }>('/api/users/tg-link', { code, tgId: String(m.chat.id) });
     nxUsers.delete(m.chat.id);
     await html(m.chat.id, r.ok && r.me ? linkedText(r.me.name) : LINK_FAILED);
+    // shu chat uchun buyruqlar menyusi ("/" tugmasi): ish beruvchiga faqat Narxtop buyruqlari
+    if (r.ok && r.me) {
+      const nx = [{ command: 'vazifalar', description: 'Bajarilmagan vazifalar' }, { command: 'excel', description: 'Joriy oy hisoboti (Excel)' }];
+      const commands = r.me.role === 'client' ? [...nx, { command: 'yordam', description: 'Bot qanday ishlaydi' }]
+        : [{ command: 'hisobot', description: 'Kunlik hisobot' }, { command: 'reja', description: 'Keyingi 7 kun' }, ...nx, { command: 'statistika', description: 'Obunachilar' }, { command: 'tasdiq', description: 'Tasdiq kutayotganlar' }];
+      await tg('setMyCommands', { commands, scope: { type: 'chat', chat_id: m.chat.id } }).catch((e: Error) => console.error(e.message));
+    }
     return true;
   }
   const me = await nxUser(m.chat.id).catch(() => null);

@@ -1,0 +1,1 @@
+ALTER TABLE `periods` ADD `closed_at` integer;
