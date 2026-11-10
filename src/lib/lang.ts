@@ -11,11 +11,10 @@ export const lang = (): Lang => cur;
 /** Matn joriy tilda: L('Yangi vazifa', 'Новая задача') */
 export const L = (uz: string, ru: string) => (cur === 'ru' ? ru : uz);
 
-/** Kirgandan keyin: brauzerda tanlov bo'lmasa, profildagi til olinadi; admin uchun bo'lim doim o'zbekcha. */
+/** Kirgandan keyin: brauzerda tanlov bo'lmasa, profildagi til olinadi. */
 export function syncLang(me: { lang?: Lang; role: string } | null) {
   if (!me) return;
-  if (me.role === 'admin') cur = 'uz';
-  else cur = saved() ?? me.lang ?? cur;
+  cur = saved() ?? me.lang ?? cur;
   document.documentElement.lang = cur;
 }
 

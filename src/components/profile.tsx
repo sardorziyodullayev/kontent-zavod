@@ -58,7 +58,7 @@ export function ProfileCard() {
   if (!me) return null;
   return (
     <Card>
-      <CardHead title={L('Mening profilim', 'Мой профиль')} sub={`${me.name} · ${me.login === 'token' ? 'admin token' : me.login}`} right={me.role === 'client' ? <LangSwitch /> : undefined} />
+      <CardHead title={L('Mening profilim', 'Мой профиль')} sub={`${me.name} · ${me.login === 'token' ? 'admin token' : me.login}`} right={<LangSwitch />} />
       <div className="grid gap-3">
         {me.via === 'session' ? (
           <div className="flex flex-wrap items-center gap-3">

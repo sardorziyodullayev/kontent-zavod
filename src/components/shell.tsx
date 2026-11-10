@@ -118,9 +118,11 @@ function AdminShell({ me }: { me: MeInfo | null }) {
             <Button variant="ghost" size="icon" className="md:hidden" aria-label="Menyu" onClick={() => setUI({ menu: true })}><Menu size={18} /></Button>
             <div className="min-w-0">
               <h1 className="truncate font-display text-[16px] font-semibold tracking-[-0.02em] sm:text-[20px]">{title}</h1>
-              <div className="hidden truncate text-[12.5px] text-muted sm:block">{page.sub}</div>
+              <div className="hidden truncate text-[12.5px] text-muted sm:block">{page.to === '/narxtop' ? L(page.sub, 'Задачи работодателя, статусы, оплаты и отчёт Excel') : page.sub}</div>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              {/* til: Narxtop bo'limi (ish beruvchi bilan birga ko'riladigan sahifa) ikki tilda */}
+              {path === '/narxtop' && <LangSwitch />}
               <button className="flex size-10 items-center gap-2.5 rounded-full bg-surface-2 text-muted hover:text-ink max-lg:justify-center lg:h-11 lg:w-[260px] lg:px-4" onClick={() => setUI({ palette: true })} aria-label="Qidirish">
                 <span className="hidden text-[13px] lg:inline">Qidirish yoki buyruq…</span>
                 <span className="ml-auto hidden rounded-md bg-surface px-1.5 text-[11px] leading-5 lg:inline">Ctrl K</span>
