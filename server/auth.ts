@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import type { Me, Role } from '../src/core/narxtop';
+import type { Lang, Me, Role } from '../src/core/narxtop';
 import { db } from './db';
 import { users } from './schema';
 
@@ -11,7 +11,7 @@ const TOKEN = process.env.ADMIN_TOKEN ?? '';
 const SECRET = process.env.SESSION_SECRET || (TOKEN ? `kz-session:${TOKEN}` : 'kz-local-dev');
 const SESSION_DAYS = 60;
 
-export type AuthUser = { id: number; login: string; name: string; role: Role; tgId: string | null; via: 'session' | 'token' | 'local' };
+export type AuthUser = { id: number; login: string; name: string; role: Role; tgId: string | null; lang: Lang; via: 'session' | 'token' | 'local' };
 export type Env = { Variables: { user: AuthUser } };
 
 export function hashPassword(pw: string): string {
@@ -49,15 +49,15 @@ const userCount = async () => (await db.select({ n: sql<number>`count(*)` }).fro
 export async function resolveUser(c: Context): Promise<AuthUser | null> {
   const h = c.req.header('Authorization') ?? '';
   const tok = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
-  if (tok && TOKEN && sameToken(tok, TOKEN)) return { id: 0, login: 'token', name: 'Admin', role: 'admin', tgId: process.env.TELEGRAM_OWNER_ID ?? null, via: 'token' };
+  if (tok && TOKEN && sameToken(tok, TOKEN)) return { id: 0, login: 'token', name: 'Admin', role: 'admin', tgId: process.env.TELEGRAM_OWNER_ID ?? null, lang: 'uz', via: 'token' };
   if (tok.startsWith('u.')) {
     const s = readSession(tok);
     if (!s) return null;
     const [u] = await db.select().from(users).where(eq(users.id, s.id));
     if (!u || u.ver !== s.ver) return null;
-    return { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, via: 'session' };
+    return { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, via: 'session' };
   }
-  if (!TOKEN && !tok && (await userCount()) === 0) return { id: 0, login: 'local', name: 'Admin', role: 'admin', tgId: null, via: 'local' };
+  if (!TOKEN && !tok && (await userCount()) === 0) return { id: 0, login: 'local', name: 'Admin', role: 'admin', tgId: null, lang: 'uz', via: 'local' };
   return null;
 }
 
@@ -89,7 +89,8 @@ function checkNewPassword(pw: unknown): string {
   if (s.length < 6) throw new HTTPException(400, { message: 'Parol kamida 6 belgi bo‘lsin' });
   return s;
 }
-const meOf = (u: { id: number; login: string; name: string; role: Role; tgId: string | null }): Me => ({ id: u.id, login: u.login, name: u.name, role: u.role, tgLinked: !!u.tgId });
+const meOf = (u: { id: number; login: string; name: string; role: Role; tgId: string | null; lang: Lang }): Me => ({ id: u.id, login: u.login, name: u.name, role: u.role, tgLinked: !!u.tgId, lang: u.lang });
+const cleanLang = (l: unknown): Lang | null => (l === 'ru' || l === 'uz' ? l : null);
 
 export const auth = new Hono<Env>()
   .post('/auth/login', async (c) => {
@@ -108,6 +109,13 @@ export const auth = new Hono<Env>()
   .get('/me', (c) => {
     const u = c.get('user');
     return c.json({ ...meOf(u), via: u.via });
+  })
+  .post('/me/lang', async (c) => {
+    const u = c.get('user');
+    const lang = cleanLang((await c.req.json<{ lang?: string }>().catch(() => ({}) as { lang?: string })).lang);
+    if (!lang) throw new HTTPException(400, { message: 'Til: uz yoki ru' });
+    if (u.via === 'session') await db.update(users).set({ lang }).where(eq(users.id, u.id));
+    return c.json({ ok: true });
   })
   .post('/me/password', async (c) => {
     const u = c.get('user');
@@ -136,24 +144,25 @@ export const auth = new Hono<Env>()
   // --- foydalanuvchilarni boshqarish (faqat admin) ---
   .get('/users', adminOnly, async (c) => c.json((await db.select().from(users)).map((u) => ({ ...meOf(u), createdAt: u.createdAt }))))
   .post('/users', adminOnly, async (c) => {
-    const b = await c.req.json<{ login?: string; name?: string; role?: Role; password?: string }>();
+    const b = await c.req.json<{ login?: string; name?: string; role?: Role; password?: string; lang?: string }>();
     const login = cleanLogin(b.login);
     if (!/^[a-z0-9._-]{3,32}$/.test(login)) throw new HTTPException(400, { message: 'Login 3–32 belgi: lotin harflari, raqam, nuqta, chiziqcha' });
     const name = String(b.name ?? '').trim() || login;
     const role: Role = b.role === 'admin' ? 'admin' : 'client';
     const [dup] = await db.select({ id: users.id }).from(users).where(eq(users.login, login));
     if (dup) throw new HTTPException(400, { message: 'Bu login band' });
-    const [u] = await db.insert(users).values({ login, name, role, passHash: hashPassword(checkNewPassword(b.password)), createdAt: Date.now() }).returning();
+    const [u] = await db.insert(users).values({ login, name, role, lang: cleanLang(b.lang) ?? (role === 'client' ? 'ru' : 'uz'), passHash: hashPassword(checkNewPassword(b.password)), createdAt: Date.now() }).returning();
     return c.json(meOf(u), 201);
   })
   .patch('/users/:id', adminOnly, async (c) => {
     const id = Number(c.req.param('id'));
-    const b = await c.req.json<{ name?: string; role?: Role; password?: string }>();
+    const b = await c.req.json<{ name?: string; role?: Role; password?: string; lang?: string }>();
     const [row] = await db.select().from(users).where(eq(users.id, id));
     if (!row) throw new HTTPException(404, { message: 'Foydalanuvchi topilmadi' });
     const patch: Partial<typeof users.$inferInsert> = {};
     if (b.name?.trim()) patch.name = b.name.trim();
     if (b.role === 'admin' || b.role === 'client') patch.role = b.role;
+    if (cleanLang(b.lang)) patch.lang = cleanLang(b.lang)!;
     if (b.password) { patch.passHash = hashPassword(checkNewPassword(b.password)); patch.ver = row.ver + 1; }
     await db.update(users).set(patch).where(eq(users.id, id));
     return c.json({ ok: true });
@@ -191,11 +200,14 @@ export async function botUsername(): Promise<string | null> {
 }
 
 /** Bog'langan foydalanuvchilarga Telegram xabari (bot tokeni bo'lmasa jim o'tadi). */
-export async function tgNotify(chatIds: (string | null | undefined)[], text: string) {
+export async function tgNotify(targets: { chatId: string | null | undefined; lang: Lang }[], text: (lang: Lang) => string) {
   const t = process.env.TELEGRAM_BOT_TOKEN;
   if (!t) return;
-  for (const chat_id of [...new Set(chatIds.filter(Boolean))]) {
-    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true } }) })
+  const seen = new Set<string>();
+  for (const { chatId: chat_id, lang } of targets) {
+    if (!chat_id || seen.has(chat_id)) continue;
+    seen.add(chat_id);
+    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id, text: text(lang), parse_mode: 'HTML', link_preview_options: { is_disabled: true } }) })
       .catch((e: Error) => console.error('tgNotify:', e.message));
   }
 }

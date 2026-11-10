@@ -46,6 +46,19 @@ describe('narxtop', () => {
     expect(N.som(5_000_000)).toBe('5 000 000');
   });
 
+  test('rus tili: nomlar, holatlar, tarix va bot matni', () => {
+    expect(N.label('Avtosalonlar', 'ru')).toBe('Автосалоны');
+    expect(N.label('Multfilm', 'ru')).toBe('Мультик');
+    expect(N.label('Yangi tur', 'ru')).toBe('Yangi tur');
+    expect(N.label('Avtosalonlar', 'uz')).toBe('Avtosalonlar');
+    expect(N.statusLabel('fix', 'ru')).toBe('Правки');
+    expect(N.logLabel('Holat: Yangi → Tayyor', 'ru')).toBe('Статус: Новое → Готово');
+    expect(N.logLabel('Yo‘nalish: MFO', 'ru')).toBe('Направление: МФО');
+    expect(N.logLabel('💬 tuzating', 'ru')).toBe('💬 tuzating');
+    expect(N.createdText({ id: 5, title: 'A', direction: 'Banklar', style: '' }, 'style', 'ru')).toContain('Направление: Банки');
+    expect(N.choiceKeyboard('s', 5, N.DEFAULT_STYLES, 'ru').inline_keyboard[0][0].text).toBe('Мультик');
+  });
+
   test('bot: bajarilmagan vazifalar ro‘yxati va tugmalar', () => {
     const d: N.NarxtopData = {
       periods: [{ id: 1, name: '1-oy', price: 0, createdAt: 0, closedAt: 1 }, { id: 2, name: '2-oy', price: 0, createdAt: 1, closedAt: null }],

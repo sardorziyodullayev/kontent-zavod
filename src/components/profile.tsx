@@ -2,11 +2,25 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, LogOut, Send, Trash2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
-import type { Me, Role } from '@/core/narxtop';
+import type { Lang, Me, Role } from '@/core/narxtop';
 import { apiCall, logout, saveToken, useMe } from '@/lib/data';
+import { L, lang, switchLang } from '@/lib/lang';
+import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 import { Modal } from './ui/dialog';
 import { Card, CardHead, Field } from './ui/primitives';
+
+/** UZ | RU almashtirgich. persist: kirgan foydalanuvchi uchun tanlov profilga yoziladi (bot ham shu tilda yozadi). */
+export function LangSwitch({ persist = true, className }: { persist?: boolean; className?: string }) {
+  const set = (l: Lang) => l !== lang() && switchLang(l, persist ? (x) => apiCall('/me/lang', 'POST', { lang: x }) : undefined);
+  return (
+    <div role="group" aria-label="Til / Язык" className={cn('inline-flex rounded-full bg-surface-2 p-0.5 text-[12.5px] font-semibold', className)}>
+      {(['uz', 'ru'] as const).map((l) => (
+        <button key={l} onClick={() => set(l)} aria-pressed={lang() === l} className={cn('rounded-full px-2.5 py-1 text-muted hover:text-ink', lang() === l && 'bg-pill text-pill-ink hover:text-pill-ink')}>{l.toUpperCase()}</button>
+      ))}
+    </div>
+  );
+}
 
 /** Bot havolasini ochadi: foydalanuvchi botda "Start" bossa, Telegram hisobi shu loginga bog'lanadi. */
 export function TelegramLink({ compact }: { compact?: boolean }) {
@@ -17,9 +31,9 @@ export function TelegramLink({ compact }: { compact?: boolean }) {
     setState('wait');
     try {
       const j = await apiCall<{ url: string | null }>('/me/telegram', 'POST', {});
-      if (!j.url) { setState('err'); setMsg('Bot sozlanmagan (TELEGRAM_BOT_TOKEN yo‘q).'); return; }
+      if (!j.url) { setState('err'); setMsg(L('Bot sozlanmagan (TELEGRAM_BOT_TOKEN yo‘q).', 'Бот не настроен.')); return; }
       window.open(j.url, '_blank', 'noopener');
-      setMsg('Telegram ochildi: botda “Start” ni bosing. Ulangach, bu yerda belgi o‘zi yangilanadi.');
+      setMsg(L('Telegram ochildi: botda “Start” ni bosing. Ulangach, bu yerda belgi o‘zi yangilanadi.', 'Открылся Telegram: нажмите «Start» в боте. После подключения отметка здесь обновится сама.'));
       // ulanishni kutamiz: 2 daqiqa davomida har 4 soniyada tekshiramiz
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 4000));
@@ -31,7 +45,7 @@ export function TelegramLink({ compact }: { compact?: boolean }) {
   }
   return (
     <div className="grid gap-1.5">
-      <Button variant="primary" size={compact ? 'sm' : 'md'} onClick={go} disabled={state === 'wait'}><Send size={15} />{state === 'wait' ? 'Kutilmoqda…' : 'Telegram’ni ulash'}</Button>
+      <Button variant="primary" size={compact ? 'sm' : 'md'} onClick={go} disabled={state === 'wait'}><Send size={15} />{state === 'wait' ? L('Kutilmoqda…', 'Ожидание…') : L('Telegram’ni ulash', 'Подключить Telegram')}</Button>
       {msg && <span className={state === 'err' ? 'text-[12.5px] text-critical-text' : 'text-[12.5px] text-muted'}>{msg}</span>}
     </div>
   );
@@ -44,21 +58,21 @@ export function ProfileCard() {
   if (!me) return null;
   return (
     <Card>
-      <CardHead title="Mening profilim" sub={`${me.name} · ${me.login === 'token' ? 'admin token' : me.login}`} />
+      <CardHead title={L('Mening profilim', 'Мой профиль')} sub={`${me.name} · ${me.login === 'token' ? 'admin token' : me.login}`} right={me.role === 'client' ? <LangSwitch /> : undefined} />
       <div className="grid gap-3">
         {me.via === 'session' ? (
           <div className="flex flex-wrap items-center gap-3">
             {me.tgLinked ? (
               <>
-                <span className="inline-flex items-center gap-2 text-[13.5px]"><Send size={15} className="text-accent-text" />Telegram ulangan — vazifalarni botga yuborishingiz mumkin</span>
-                <Button size="sm" variant="ghost" onClick={async () => { await apiCall('/me/telegram/unlink', 'POST', {}); qc.invalidateQueries({ queryKey: ['me'] }); }}>Uzish</Button>
+                <span className="inline-flex items-center gap-2 text-[13.5px]"><Send size={15} className="text-accent-text" />{L('Telegram ulangan — vazifalarni botga yuborishingiz mumkin', 'Telegram подключён — задачи можно отправлять боту')}</span>
+                <Button size="sm" variant="ghost" onClick={async () => { await apiCall('/me/telegram/unlink', 'POST', {}); qc.invalidateQueries({ queryKey: ['me'] }); }}>{L('Uzish', 'Отключить')}</Button>
               </>
             ) : <TelegramLink />}
           </div>
         ) : <p className="text-[13px] text-muted">Siz admin token bilan kirgansiz. Login va parol yarating (pastda), keyin shu bilan kiring — Telegram’ni ulash ham shunda ochiladi.</p>}
         <div className="flex flex-wrap gap-2">
-          {me.via === 'session' && <Button onClick={() => setPw(true)}><KeyRound size={15} />Parolni o‘zgartirish</Button>}
-          {me.via !== 'local' && <Button onClick={() => { logout(); location.reload(); }}><LogOut size={15} />Chiqish</Button>}
+          {me.via === 'session' && <Button onClick={() => setPw(true)}><KeyRound size={15} />{L('Parolni o‘zgartirish', 'Сменить пароль')}</Button>}
+          {me.via !== 'local' && <Button onClick={() => { logout(); location.reload(); }}><LogOut size={15} />{L('Chiqish', 'Выйти')}</Button>}
         </div>
       </div>
       <PasswordModal open={pw} onClose={() => setPw(false)} />
@@ -70,23 +84,23 @@ function PasswordModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [err, setErr] = useState('');
   const [ok, setOk] = useState(false);
   return (
-    <Modal open={open} onClose={() => { onClose(); setErr(''); setOk(false); }} title="Parolni o‘zgartirish">
-      {ok ? <p className="text-[14px]">✅ Parol o‘zgartirildi. Boshqa qurilmalarda qayta kirish kerak bo‘ladi.</p> : (
+    <Modal open={open} onClose={() => { onClose(); setErr(''); setOk(false); }} title={L('Parolni o‘zgartirish', 'Сменить пароль')}>
+      {ok ? <p className="text-[14px]">{L('✅ Parol o‘zgartirildi. Boshqa qurilmalarda qayta kirish kerak bo‘ladi.', '✅ Пароль изменён. На других устройствах нужно войти заново.')}</p> : (
         <form className="grid gap-3.5" onSubmit={async (e) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
-          if (fd.get('password') !== fd.get('again')) return setErr('Yangi parollar bir xil emas');
+          if (fd.get('password') !== fd.get('again')) return setErr(L('Yangi parollar bir xil emas', 'Новые пароли не совпадают'));
           try {
             const j = await apiCall<{ token: string }>('/me/password', 'POST', { old: fd.get('old'), password: fd.get('password') });
             saveToken(j.token);
             setOk(true);
           } catch (x) { setErr((x as Error).message); }
         }}>
-          <Field label="Hozirgi parol"><input name="old" type="password" className="input h-11" autoComplete="current-password" required /></Field>
-          <Field label="Yangi parol (kamida 6 belgi)"><input name="password" type="password" className="input h-11" autoComplete="new-password" minLength={6} required /></Field>
-          <Field label="Yangi parol yana bir marta"><input name="again" type="password" className="input h-11" autoComplete="new-password" minLength={6} required /></Field>
+          <Field label={L('Hozirgi parol', 'Текущий пароль')}><input name="old" type="password" className="input h-11" autoComplete="current-password" required /></Field>
+          <Field label={L('Yangi parol (kamida 6 belgi)', 'Новый пароль (минимум 6 символов)')}><input name="password" type="password" className="input h-11" autoComplete="new-password" minLength={6} required /></Field>
+          <Field label={L('Yangi parol yana bir marta', 'Повторите новый пароль')}><input name="again" type="password" className="input h-11" autoComplete="new-password" minLength={6} required /></Field>
           {err && <p className="text-[13px] text-critical-text">{err}</p>}
-          <Button type="submit" variant="primary" className="h-11 justify-center">Saqlash</Button>
+          <Button type="submit" variant="primary" className="h-11 justify-center">{L('Saqlash', 'Сохранить')}</Button>
         </form>
       )}
     </Modal>
@@ -112,7 +126,7 @@ export function UsersCard() {
           <li key={u.id} className="flex flex-wrap items-center gap-2 rounded-[14px] border border-line px-3 py-2 text-[13.5px]">
             <b className="font-semibold">{u.name}</b>
             <span className="text-muted">{u.login}</span>
-            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11.5px] text-ink-2">{u.role === 'admin' ? 'Admin' : 'Mijoz'}</span>
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11.5px] text-ink-2">{u.role === 'admin' ? 'Admin' : 'Mijoz'} · {u.lang.toUpperCase()}</span>
             {u.tgLinked && <span title="Telegram ulangan"><Send size={13} className="text-accent-text" /></span>}
             <span className="ml-auto flex gap-1">
               <Button size="sm" variant="ghost" onClick={() => { setErr(''); setReset(u); }}><KeyRound size={13} />Parol</Button>
@@ -131,6 +145,12 @@ export function UsersCard() {
           <Field label="Ism (panelda va hisobotda ko‘rinadi)"><input name="name" className="input h-11" placeholder="masalan: Narxtop menejeri" required autoFocus /></Field>
           <Field label="Login (lotin harflari, bo‘sh joysiz)"><input name="login" className="input h-11" autoCapitalize="none" placeholder="narxtop" required /></Field>
           <Field label="Parol (kamida 6 belgi)"><input name="password" type="text" className="input h-11" autoComplete="new-password" minLength={6} required /></Field>
+          <Field label="Til (panel va bot xabarlari)">
+            <select name="lang" className="input h-11" defaultValue="ru">
+              <option value="ru">Rus tili</option>
+              <option value="uz">O‘zbek tili</option>
+            </select>
+          </Field>
           <Field label="Huquq">
             <select name="role" className="input h-11" defaultValue="client">
               <option value="client">{ROLE.client}</option>

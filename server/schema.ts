@@ -82,6 +82,8 @@ export const users = sqliteTable('users', {
   /** parol o'zgarsa eski sessiyalar bekor bo'ladi */
   ver: integer('ver').notNull().default(1),
   tgId: text('tg_id'),
+  /** panel va bot tili: ish beruvchi rus tilida ishlaydi */
+  lang: text('lang', { enum: ['uz', 'ru'] }).notNull().default('uz'),
   linkCode: text('link_code'),
   linkExp: integer('link_exp'),
   createdAt: integer('created_at').notNull(),

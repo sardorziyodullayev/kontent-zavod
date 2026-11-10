@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, normalizeDirection, normalizeStyle, statusName, statusRu, summarize, titleFrom, type NarxtopData, type Order, type OrderStatus } from '../src/core/narxtop';
+import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, label, normalizeDirection, normalizeStyle, statusName, statusRu, summarize, titleFrom, tr, type Lang, type NarxtopData, type Order, type OrderStatus } from '../src/core/narxtop';
 import { adminOnly, botUsername, tgNotify, type AuthUser, type Env } from './auth';
 import { db } from './db';
 import { orders, payments, periods, users, type OrderFile } from './schema';
@@ -33,12 +33,12 @@ async function currentPeriodId(): Promise<number> {
 }
 
 /** Kimga xabar: mijoz harakat qilsa — adminlarga, admin harakat qilsa — mijozlarga. */
-async function notifyOther(actor: AuthUser, text: string) {
+async function notifyOther(actor: AuthUser, text: (lang: Lang) => string) {
   const all = await db.select().from(users);
   const targets = actor.role === 'client'
-    ? [...all.filter((u) => u.role === 'admin').map((u) => u.tgId), process.env.TELEGRAM_OWNER_ID]
-    : all.filter((u) => u.role === 'client').map((u) => u.tgId);
-  await tgNotify(targets.filter((t) => t && t !== actor.tgId), text);
+    ? [...all.filter((u) => u.role === 'admin').map((u) => ({ chatId: u.tgId, lang: u.lang })), { chatId: process.env.TELEGRAM_OWNER_ID, lang: 'uz' as Lang }]
+    : all.filter((u) => u.role === 'client').map((u) => ({ chatId: u.tgId, lang: u.lang }));
+  await tgNotify(targets.filter((t) => t.chatId && t.chatId !== actor.tgId), text);
 }
 const link = (o: { id: number }) => (PANEL() ? `\n${PANEL()}/#/narxtop?v=${o.id}` : '');
 
@@ -53,7 +53,7 @@ export async function createOrder(actor: AuthUser, b: Partial<Order> & { text?: 
     status: source === 'import' && b.status && STATUS_IDS.has(b.status) ? b.status : 'new', deadline: b.deadline ?? null, videoUrl: String(b.videoUrl ?? ''), note: String(b.note ?? ''),
     createdAt: now, createdBy: actor.name, source, files, log: [{ t: now, who: actor.name, text: source === 'telegram' ? 'Telegram orqali yuborildi' : source === 'import' ? 'Google jadvaldan ko‘chirildi' : 'Vazifa qo‘shildi' }],
   }).returning();
-  if (source !== 'import') await notifyOther(actor, `🆕 <b>Yangi vazifa #${o.id}</b>\n${esc(o.title)}\n👤 ${esc(actor.name)}${link(o)}`);
+  if (source !== 'import') await notifyOther(actor, (l) => `🆕 <b>${tr(l, 'Yangi vazifa', 'Новая задача')} #${o.id}</b>\n${esc(o.title)}\n👤 ${esc(actor.name)}${link(o)}`);
   return o as Order;
 }
 
@@ -94,11 +94,12 @@ export async function updateOrder(actor: AuthUser, id: number, b: Partial<Order>
   patch.log = log.slice(-60);
   const [n] = await db.update(orders).set(patch).where(eq(orders.id, id)).returning();
   const head = `#${n.id} ${esc(n.title)}`;
-  if (statusChanged === 'review') await notifyOther(actor, `👀 <b>Tekshiring:</b> ${head}${n.videoUrl ? `\n🎬 ${esc(n.videoUrl)}` : ''}${link(n)}`);
-  else if (statusChanged === 'done') await notifyOther(actor, `✅ <b>Tayyor:</b> ${head}${n.videoUrl ? `\n🎬 ${esc(n.videoUrl)}` : ''}`);
-  else if (statusChanged === 'fix') await notifyOther(actor, `✏️ <b>Tuzatish kerak:</b> ${head}${comment ? `\n💬 ${esc(comment)}` : ''}${link(n)}`);
-  else if (statusChanged === 'work') await notifyOther(actor, `🛠 <b>Ish boshlandi:</b> ${head}`);
-  else if (comment) await notifyOther(actor, `💬 <b>${esc(actor.name)}</b> · ${head}\n${esc(comment)}`);
+  const vid = n.videoUrl ? `\n🎬 ${esc(n.videoUrl)}` : '';
+  if (statusChanged === 'review') await notifyOther(actor, (l) => `👀 <b>${tr(l, 'Tekshiring', 'Проверьте')}:</b> ${head}${vid}${link(n)}`);
+  else if (statusChanged === 'done') await notifyOther(actor, (l) => `✅ <b>${tr(l, 'Tayyor', 'Готово')}:</b> ${head}${vid}`);
+  else if (statusChanged === 'fix') await notifyOther(actor, (l) => `✏️ <b>${tr(l, 'Tuzatish kerak', 'Нужны правки')}:</b> ${head}${comment ? `\n💬 ${esc(comment)}` : ''}${link(n)}`);
+  else if (statusChanged === 'work') await notifyOther(actor, (l) => `🛠 <b>${tr(l, 'Ish boshlandi', 'Работа начата')}:</b> ${head}`);
+  else if (comment) await notifyOther(actor, () => `💬 <b>${esc(actor.name)}</b> · ${head}\n${esc(comment)}`);
   return n as Order;
 }
 
@@ -136,7 +137,7 @@ export async function buildReport(periodId: number | 'all'): Promise<{ buf: Buff
     sum.addRow(['Всего видео', s.total]); sum.addRow(['Готово', s.done]); sum.addRow(['В работе', s.open]);
     sum.addRow([]);
     head(sum, sum.addRow(['Направление', 'Всего', 'Готово', 'Осталось']).number);
-    const ru = (n: string) => (n === 'Ko‘rsatilmagan' ? 'Не указано' : n);
+    const ru = (n: string) => label(n, 'ru');
     for (const g of s.byDirection) sum.addRow([ru(g.name), g.total, g.done, g.total - g.done]);
     sum.addRow([]);
     head(sum, sum.addRow(['Стилистика', 'Всего', 'Готово']).number);
@@ -151,7 +152,7 @@ export async function buildReport(periodId: number | 'all'): Promise<{ buf: Buff
   vs.columns = [{ header: '№', width: 6 }, ...(ps.length > 1 ? [{ header: 'Период', width: 12 }] : []), { header: 'Название', width: 42 }, { header: 'Направление', width: 18 }, { header: 'Стилистика', width: 14 }, { header: 'Статус', width: 14 }, { header: 'Дата задачи', width: 13 }, { header: 'Дата готовности', width: 15 }, { header: 'Ссылка на видео', width: 36 }, { header: 'Примечание', width: 30 }];
   head(vs, 1);
   for (const p of ps) d.orders.filter((o) => o.periodId === p.id).forEach((o, i) => {
-    const r = vs.addRow([i + 1, ...(ps.length > 1 ? [p.name] : []), o.title, o.direction, o.style, statusRu(o.status), o.source === 'import' ? '' : fmtD(o.createdAt), o.source === 'import' ? '' : fmtD(o.doneAt), o.videoUrl, o.note]);
+    const r = vs.addRow([i + 1, ...(ps.length > 1 ? [p.name] : []), o.title, label(o.direction, 'ru'), label(o.style, 'ru'), statusRu(o.status), o.source === 'import' ? '' : fmtD(o.createdAt), o.source === 'import' ? '' : fmtD(o.doneAt), o.videoUrl, o.note]);
     if (o.status === 'done') r.getCell(ps.length > 1 ? 6 : 5).font = { color: { argb: 'FF006300' }, bold: true };
   });
   vs.views = [{ state: 'frozen', ySplit: 1 }];
@@ -225,13 +226,13 @@ export const narxtop = new Hono<Env>()
     const [u] = await db.select().from(users).where(eq(users.tgId, String(b.tgId)));
     const owner = String(b.tgId) === process.env.TELEGRAM_OWNER_ID;
     if (!u && !owner) throw new HTTPException(403, { message: 'Telegram ulanmagan' });
-    const actor: AuthUser = u ? { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, via: 'session' } : c.get('user');
+    const actor: AuthUser = u ? { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, via: 'session' } : c.get('user');
     return c.json(await createOrder(actor, { text: b.text, title: b.title }, 'telegram', b.files ?? []), 201);
   })
   .post('/tg/order/:id', adminOnly, async (c) => {
     const b = await c.req.json<{ tgId: string; direction?: string; style?: string; status?: OrderStatus }>();
     const [u] = await db.select().from(users).where(eq(users.tgId, String(b.tgId)));
-    const actor: AuthUser = u ? { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, via: 'session' } : c.get('user');
+    const actor: AuthUser = u ? { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, via: 'session' } : c.get('user');
     const { tgId: _t, ...patch } = b;
     return c.json(await updateOrder(actor, Number(c.req.param('id')), patch));
   });

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { alerts, localHour } from '@/core';
 import { AuthError, useAppData, useMe, useNow, type AppData, type MeInfo } from '@/lib/data';
 import { NarxtopPage } from '@/pages/narxtop';
-import { ProfileCard } from './profile';
+import { L, syncLang } from '@/lib/lang';
+import { LangSwitch, ProfileCard } from './profile';
 import { Modal } from './ui/dialog';
 import { openModal, setTheme, setUI, useUI } from '@/lib/ui';
 import { cn } from '@/lib/utils';
@@ -54,7 +55,8 @@ function Sidebar({ data }: { data: AppData }) {
 export function Shell() {
   const me = useMe();
   if (me.error instanceof AuthError) return <Login message={me.error.message} />;
-  if (me.isLoading) return <div className="p-10 text-muted">Yuklanmoqda…</div>;
+  if (me.isLoading) return <div className="p-10 text-muted">{L('Yuklanmoqda…', 'Загрузка…')}</div>;
+  syncLang(me.data ?? null);
   if (me.data?.role === 'client') return <ClientShell me={me.data} />;
   return <AdminShell me={me.data ?? null} />;
 }
@@ -76,19 +78,20 @@ function ClientShell({ me }: { me: MeInfo }) {
           <PixelLogo size={38} />
           <div className="min-w-0">
             <h1 className="truncate font-display text-[17px] font-semibold tracking-[-0.02em] sm:text-[20px]">Narxtop</h1>
-            <div className="hidden truncate text-[12.5px] text-muted sm:block">AI videolar: vazifalar, holat va hisobot · {BRAND.name}</div>
+            <div className="hidden truncate text-[12.5px] text-muted sm:block">{L('AI videolar: vazifalar, holat va hisobot', 'AI-видео: задачи, статусы и отчёт')} · {BRAND.name}</div>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <LangSwitch />
             <Button size="icon" className="max-sm:hidden" aria-label="Mavzuni almashtirish" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</Button>
             <button className="flex items-center gap-2.5 rounded-full py-1 pr-3 pl-1 hover:bg-surface-2" onClick={() => setProfile(true)} aria-label="Profil">
               <span className="grid size-9 place-items-center rounded-full bg-pill font-display text-[14px] font-semibold text-pill-ink">{me.name[0]?.toUpperCase()}</span>
-              <span className="hidden text-left leading-tight sm:block"><b className="block text-[13px] font-semibold">{me.name}</b><span className="text-[11.5px] text-muted">Profil va chiqish</span></span>
+              <span className="hidden text-left leading-tight sm:block"><b className="block text-[13px] font-semibold">{me.name}</b><span className="text-[11.5px] text-muted">{L('Profil va chiqish', 'Профиль и выход')}</span></span>
             </button>
           </div>
         </div>
       </header>
       <main className="pt-3 pb-16 md:pt-4"><NarxtopPage me={me} /></main>
-      <Modal open={profile} onClose={() => setProfile(false)} title="Profil"><ProfileCard /></Modal>
+      <Modal open={profile} onClose={() => setProfile(false)} title={L('Profil', 'Профиль')}><ProfileCard /></Modal>
     </div>
   );
 }

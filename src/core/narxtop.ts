@@ -3,7 +3,7 @@
 export type OrderStatus = 'new' | 'work' | 'review' | 'fix' | 'done';
 export type Role = 'admin' | 'client';
 
-export interface Me { id: number; login: string; name: string; role: Role; tgLinked: boolean }
+export interface Me { id: number; login: string; name: string; role: Role; tgLinked: boolean; lang: Lang }
 export interface Period { id: number; name: string; price: number; createdAt: number; closedAt: number | null }
 export interface Payment { id: number; periodId: number; amount: number; paidAt: number; note: string }
 export interface OrderLog { t: number; who: string; text: string }
@@ -87,47 +87,77 @@ export function summarize(orders: Order[], period: Period | undefined, payments:
 /** 5000000 → "5 000 000" */
 export const som = (n: number) => Math.round(n).toLocaleString('ru-RU').replace(/ /g, ' ');
 
+// ---------- til: o'zbek / rus (ish beruvchi rus tilida ishlaydi) ----------
+export type Lang = 'uz' | 'ru';
+export const tr = (lang: Lang, uz: string, ru: string) => (lang === 'ru' ? ru : uz);
+
+/** Bazada nomlar o'zbekcha saqlanadi; rus tilida ko'rsatish uchun tarjima (Excel hisobot ham shu nomlarni oladi). */
+const NAME_RU: Record<string, string> = {
+  NARXTOP: 'NARXTOP', Internet: 'Интернет', Novostroyka: 'Новостройки', Avtosalonlar: 'Автосалоны', MFO: 'МФО', Banklar: 'Банки',
+  Serial: 'Сериал', Reklama: 'Реклама', Hamkorlar: 'Партнёры', 'O‘quv video': 'Обучающие', Alohida: 'Отдельно',
+  Multfilm: 'Мультик', Real: 'Реал', Moushn: 'Моушн', 'Ko‘rsatilmagan': 'Не указано',
+};
+export const label = (name: string, lang: Lang) => (lang === 'ru' ? NAME_RU[name] ?? name : name);
+export const statusLabel = (s: OrderStatus, lang: Lang) => (lang === 'ru' ? statusRu(s) : statusName(s));
+const HINT_RU: Record<OrderStatus, string> = { new: 'Сценарий получен, работа не начата', work: 'Видео в работе', review: 'Видео отправлено, ждём ответа', fix: 'Запрошены правки', done: 'Принято' };
+export const statusHint = (s: OrderStatus, lang: Lang) => (lang === 'ru' ? HINT_RU[s] : STATUSES.find((x) => x.id === s)?.hint ?? '');
+
+/** Tarixdagi yozuvlar bazada o'zbekcha: rus tilida ko'rsatishda tarjima qilinadi. */
+export function logLabel(text: string, lang: Lang): string {
+  if (lang !== 'ru') return text;
+  const FIX: [string, string][] = [['Vazifa qo‘shildi', 'Задача добавлена'], ['Telegram orqali yuborildi', 'Отправлено через Telegram'], ['Google jadvaldan ko‘chirildi', 'Перенесено из Google-таблицы'],
+    ['Nomi o‘zgardi', 'Изменено название'], ['Ssenariy yangilandi', 'Сценарий обновлён'], ['Video havolasi', 'Ссылка на видео'], ['Muddat', 'Срок'], ['Oy o‘zgardi', 'Изменён месяц']];
+  for (const [uz, ru] of FIX) if (text === uz) return ru;
+  if (text.startsWith('Holat: ')) {
+    let t = 'Статус: ' + text.slice(7);
+    for (const st of STATUSES) t = t.replaceAll(st.name, st.ru);
+    return t;
+  }
+  if (text.startsWith('Yo‘nalish: ')) return 'Направление: ' + label(text.slice(11), 'ru');
+  if (text.startsWith('Uslub: ')) return 'Стиль: ' + label(text.slice(7), 'ru');
+  return text;
+}
+
 // ---------- Telegram bot matnlari ----------
 const escH = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export const NX_HELP = ['🎬 <b>Narxtop vazifalari</b>', '',
-  '• Ssenariyni shu yerga yuboring (matn yoki fayl) — panelda vazifa bo‘lib tushadi.',
-  '• /vazifalar — bajarilmagan vazifalar va holati',
-  '• /excel — joriy oy hisoboti (Excel fayl)',
-  '', 'Video tayyor bo‘lsa yoki tekshirish kerak bo‘lsa, bot o‘zi xabar beradi.'].join('\n');
+export const nxHelp = (lang: Lang) => lang === 'ru'
+  ? ['🎬 <b>Задачи NARXTOP</b>', '', '• Отправьте сюда сценарий (текст или файл) — в панели появится задача.', '• /vazifalar — невыполненные задачи и их статус', '• /excel — отчёт за текущий месяц (Excel)', '', 'Когда видео готово или его нужно проверить, бот напишет сам.'].join('\n')
+  : ['🎬 <b>Narxtop vazifalari</b>', '', '• Ssenariyni shu yerga yuboring (matn yoki fayl) — panelda vazifa bo‘lib tushadi.', '• /vazifalar — bajarilmagan vazifalar va holati', '• /excel — joriy oy hisoboti (Excel fayl)', '', 'Video tayyor bo‘lsa yoki tekshirish kerak bo‘lsa, bot o‘zi xabar beradi.'].join('\n');
 
-export const linkedText = (name: string) => `✅ <b>Ulandi: ${escH(name)}</b>\n\n${NX_HELP}`;
-export const LINK_FAILED = '❌ Havola eskirgan yoki noto‘g‘ri. Paneldagi “Telegram’ni ulash” tugmasini qayta bosing.';
+export const linkedText = (name: string, lang: Lang) => `✅ <b>${tr(lang, 'Ulandi', 'Подключено')}: ${escH(name)}</b>\n\n${nxHelp(lang)}`;
+export const linkFailed = (lang: Lang) => tr(lang, '❌ Havola eskirgan yoki noto‘g‘ri. Paneldagi “Telegram’ni ulash” tugmasini qayta bosing.', '❌ Ссылка устарела или неверна. Нажмите «Подключить Telegram» в панели ещё раз.');
 
 /** /vazifalar: joriy oydagi bajarilmagan vazifalar, holat bo'yicha guruhlab. */
-export function openTasksText(d: NarxtopData, panelUrl = ''): string {
+export function openTasksText(d: NarxtopData, panelUrl = '', lang: Lang = 'uz'): string {
   const p = [...d.periods].reverse().find((x) => !x.closedAt) ?? d.periods[d.periods.length - 1];
-  if (!p) return 'Hali vazifa yo‘q.';
+  if (!p) return tr(lang, 'Hali vazifa yo‘q.', 'Задач пока нет.');
   const os = d.orders.filter((o) => o.periodId === p.id);
   const num = new Map(os.map((o, i) => [o.id, i + 1]));
   const s = summarize(os, p, d.payments.filter((x) => x.periodId === p.id));
-  const L = [`📋 <b>${escH(p.name)}</b>: ${s.total} ta vazifa, ${s.done} tasi tayyor`];
+  const L = [`📋 <b>${escH(p.name)}</b>: ${tr(lang, `${s.total} ta vazifa, ${s.done} tasi tayyor`, `задач: ${s.total}, готово: ${s.done}`)}`];
   for (const st of STATUSES.filter((x) => x.id !== 'done')) {
     const list = os.filter((o) => o.status === st.id);
     if (!list.length) continue;
-    L.push('', `<b>${st.name}</b> (${list.length})`);
-    for (const o of list.slice(0, 15)) L.push(`${num.get(o.id)}. ${escH(o.title)}${o.direction ? ` · ${escH(o.direction)}` : ''}`);
-    if (list.length > 15) L.push(`… yana ${list.length - 15} ta`);
+    L.push('', `<b>${statusLabel(st.id, lang)}</b> (${list.length})`);
+    for (const o of list.slice(0, 15)) L.push(`${num.get(o.id)}. ${escH(o.title)}${o.direction ? ` · ${escH(label(o.direction, lang))}` : ''}`);
+    if (list.length > 15) L.push(tr(lang, `… yana ${list.length - 15} ta`, `… ещё ${list.length - 15}`));
   }
-  if (s.open === 0) L.push('', 'Hammasi tayyor ✅');
-  if (panelUrl) L.push('', `Panel: ${panelUrl}/#/narxtop`);
+  if (s.open === 0) L.push('', tr(lang, 'Hammasi tayyor ✅', 'Всё готово ✅'));
+  if (panelUrl) L.push('', `${tr(lang, 'Panel', 'Панель')}: ${panelUrl}/#/narxtop`);
   return L.join('\n');
 }
 
-export const createdText = (o: Pick<Order, 'id' | 'title' | 'direction' | 'style'>, step: 'direction' | 'style' | 'done') =>
-  [`✅ <b>Vazifa qo‘shildi</b> (#${o.id})`, escH(o.title), o.direction ? `Yo‘nalish: ${escH(o.direction)}` : '', o.style ? `Uslub: ${escH(o.style)}` : '',
-    step === 'direction' ? '\nYo‘nalishni tanlang:' : step === 'style' ? '\nUslubni tanlang:' : ''].filter(Boolean).join('\n');
+export const createdText = (o: Pick<Order, 'id' | 'title' | 'direction' | 'style'>, step: 'direction' | 'style' | 'done', lang: Lang = 'uz') =>
+  [`✅ <b>${tr(lang, 'Vazifa qo‘shildi', 'Задача добавлена')}</b> (#${o.id})`, escH(o.title),
+    o.direction ? `${tr(lang, 'Yo‘nalish', 'Направление')}: ${escH(label(o.direction, lang))}` : '', o.style ? `${tr(lang, 'Uslub', 'Стиль')}: ${escH(label(o.style, lang))}` : '',
+    step === 'direction' ? tr(lang, '\nYo‘nalishni tanlang:', '\nВыберите направление:') : step === 'style' ? tr(lang, '\nUslubni tanlang:', '\nВыберите стиль:') : ''].filter(Boolean).join('\n');
 
 /** Tanlov tugmalari: 3 tadan qatorda. callback_data: nx:<d|s>:<orderId>:<index> */
-export function choiceKeyboard(kind: 'd' | 's', orderId: number, options: string[]) {
-  const btns = options.map((name, i) => ({ text: name, callback_data: `nx:${kind}:${orderId}:${i}` }));
+export function choiceKeyboard(kind: 'd' | 's', orderId: number, options: string[], lang: Lang = 'uz') {
+  const btns = options.map((name, i) => ({ text: label(name, lang), callback_data: `nx:${kind}:${orderId}:${i}` }));
   const rows: { text: string; callback_data: string }[][] = [];
   for (let i = 0; i < btns.length; i += 3) rows.push(btns.slice(i, i + 3));
-  rows.push([{ text: 'O‘tkazib yuborish', callback_data: `nx:${kind}:${orderId}:-1` }]);
+  rows.push([{ text: tr(lang, 'O‘tkazib yuborish', 'Пропустить'), callback_data: `nx:${kind}:${orderId}:-1` }]);
   return { inline_keyboard: rows };
 }
