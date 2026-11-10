@@ -182,6 +182,13 @@ export const auth = new Hono<Env>()
     await db.update(users).set({ tgId: String(b.tgId), linkCode: null, linkExp: null }).where(eq(users.id, u.id));
     return c.json({ ok: true, me: meOf({ ...u, tgId: String(b.tgId) }) });
   })
+  .post('/users/tg-lang', adminOnly, async (c) => {
+    const b = await c.req.json<{ tgId?: string; lang?: string }>();
+    const lang = cleanLang(b.lang);
+    if (!lang || !b.tgId) throw new HTTPException(400, { message: 'tgId va lang kerak' });
+    await db.update(users).set({ lang }).where(eq(users.tgId, String(b.tgId)));
+    return c.json({ ok: true });
+  })
   .get('/users/by-tg/:tgId', adminOnly, async (c) => {
     const [u] = await db.select().from(users).where(eq(users.tgId, c.req.param('tgId')));
     return c.json(u ? meOf(u) : null);

@@ -10,7 +10,7 @@ import { account as igAccount, instagramConfigured, publishReel, refreshToken as
 import { channel, extChannel, uploadVideo, videoIdOf, videoStats, youtubeConfigured } from './youtube';
 import { buildDigest } from '../src/core/digest';
 import { dayStart, localHour } from '../src/core/format';
-import { PAY_ASK, PAY_BAD, choiceKeyboard, createdText, linkFailed, linkedText, nxHelp, openTasksText, parseAmount, payText, tr, type Lang, type Me, type NarxtopData, type Order } from '../src/core/narxtop';
+import { PAY_ASK, PAY_BAD, STATUSES, choiceKeyboard, createdText, label, linkFailed, nxHelp, openTasksText, parseAmount, payText, statusLabel, tr, type Lang, type Me, type NarxtopData, type Order } from '../src/core/narxtop';
 import { GIFT_MISSING, LEAD_PROMPT, LEAD_THANKS, OWNER_HELP, PUBLIC_MENU, PUBLIC_WELCOME, SERVICES_TEXT, approvalText, approvedText, awaitingApproval, leadText, nextFreeSlot, planText, postponedText, statsText } from '../src/core/bot';
 
 const API = process.env.PANEL_URL ?? 'http://localhost:4310';
@@ -177,7 +177,7 @@ async function dailyDigest() {
 const DATA_DIR = process.env.DATA_DIR ?? './data';
 const BOT_FILE = path.join(DATA_DIR, 'bot-state.json');
 const GIFT_FILE = process.env.GIFT_FILE ?? path.resolve('brand/30-sorov.pdf');
-type BotState = { asked: Record<string, true>; leadWait: number[]; nx?: Record<string, { text: string; files: { name: string; fileId: string }[] }>; payWait?: number[] };
+type BotState = { asked: Record<string, true>; leadWait: number[]; nx?: Record<string, { text: string; files: { name: string; fileId: string }[] }>; payWait?: number[]; taskWait?: number[] };
 const loadBot = (): BotState => { try { return { asked: {}, leadWait: [], ...JSON.parse(fs.readFileSync(BOT_FILE, 'utf8')) }; } catch { return { asked: {}, leadWait: [] }; } };
 const saveBot = (s: BotState) => { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(BOT_FILE, JSON.stringify(s)); mirrorSoon(BOT_FILE); };
 const html = (chat_id: number | string, text: string, extra: object = {}) => tg('sendMessage', { chat_id, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...extra });
@@ -283,7 +283,7 @@ async function onMessage(m: NonNullable<Update['message']>, OWNER?: string) {
   if (!m.text) return;
   const cmd = m.text.trim().split(/[\s@]/)[0];
   if (isOwner) {
-    if (cmd === '/hisobot' || cmd === '/start') await sendDigest(m.chat.id);
+    if (cmd === '/hisobot') await sendDigest(m.chat.id);
     else if (cmd === '/reja' || cmd === '/statistika') {
       const { state } = await api<{ state: State }>('/api/state');
       await html(m.chat.id, cmd === '/reja' ? planText(state, Date.now()) : statsText(state, Date.now()));
@@ -315,7 +315,7 @@ async function runOnce() {
   await syncInstagram().catch((e: Error) => console.error(e.message));
   await syncChannels().catch((e: Error) => console.error(e.message));
   if (ONCE) await pollBot().catch((e: Error) => console.error(e.message));
-  await dailyDigest().catch((e: Error) => console.error(e.message));
+  if (process.env.DIGEST_AUTO === '1') await dailyDigest().catch((e: Error) => console.error(e.message)); // foydalanuvchi so'rovi: avtomatik hisobot yubormasin
   await askApprovals().catch((e: Error) => console.error(e.message));
   const queue = await api<QueueItem[]>('/api/queue');
   const due = queue.filter((j) => j.dueIn <= 0 && (!ONLY || j.postId === ONLY));
@@ -337,7 +337,8 @@ async function runOnce() {
   }
 }
 
-// ---------- Narxtop: ish beruvchi ssenariyni botga yuboradi → panelda vazifa ----------
+// ---------- Narxtop: ish beruvchi uchun bot — pastda doimiy tugmalar menyusi ----------
+// Tugmalar: vazifa qo'shish, vazifalar (holatni shu yerdan o'zgartirish), to'lovlar, oylik Excel, til, yordam.
 const nxUsers = new Map<number, { me: Me | null; t: number }>();
 async function nxUser(tgId: number): Promise<Me | null> {
   const hit = nxUsers.get(tgId);
@@ -348,17 +349,85 @@ async function nxUser(tgId: number): Promise<Me | null> {
 }
 const nxData = () => api<NarxtopData>('/api/narxtop');
 const PANEL_PUBLIC = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '';
+const escB = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const dmyB = (t: number | null) => (t ? new Date(t + 5 * 3600_000).toISOString().slice(0, 10).split('-').reverse().join('.') : '—');
+const pnameB = (n: string, lang: Lang) => (lang === 'ru' ? n.replace(/^(\d+)-oy$/, '$1-й месяц') : n);
 
-async function nxSendReport(chat: number, lang: Lang) {
-  const r = await fetch(API + `/api/narxtop/report.xlsx?lang=${lang}`, { headers });
+type NxAction = 'add' | 'tasks' | 'pay' | 'report' | 'lang' | 'help';
+const BTN: Record<NxAction, [string, string]> = {
+  add: ['📝 Vazifa qo‘shish', '📝 Добавить задачу'],
+  tasks: ['📋 Vazifalar', '📋 Задачи'],
+  pay: ['💰 To‘lovlar', '💰 Оплаты'],
+  report: ['📊 Oylik hisobot', '📊 Отчёт за месяц'],
+  lang: ['🌐 Til / Язык', '🌐 Til / Язык'],
+  help: ['ℹ️ Yordam', 'ℹ️ Помощь'],
+};
+/** Pastdagi doimiy tugmalar (reply keyboard). */
+const nxKeyboard = (lang: Lang) => {
+  const b = (a: NxAction) => ({ text: BTN[a][lang === 'ru' ? 1 : 0] });
+  return { keyboard: [[b('add'), b('tasks')], [b('pay'), b('report')], [b('lang'), b('help')]], resize_keyboard: true, is_persistent: true };
+};
+/** Matn tugmalardan birimi? (ikkala tildagi yozuv ham, buyruqlar ham) */
+function nxActionOf(text: string): NxAction | null {
+  for (const [a, labels] of Object.entries(BTN) as [NxAction, [string, string]][]) if (labels.includes(text)) return a;
+  const cmd = text.split(/[\s@]/)[0];
+  const CMD: Record<string, NxAction> = { '/vazifa': 'add', '/zadacha': 'add', '/vazifalar': 'tasks', '/zadachi': 'tasks', '/tolov': 'pay', '/oplata': 'pay', '/excel': 'report', '/otchet': 'report', '/til': 'lang', '/yazyk': 'lang', '/yordam': 'help', '/help': 'help' };
+  return CMD[cmd] ?? null;
+}
+const panelBtn = (lang: Lang) => (PANEL_PUBLIC ? [{ text: tr(lang, '🔗 Panelni ochish', '🔗 Открыть панель'), url: `${PANEL_PUBLIC}/#/narxtop` }] : []);
+
+async function nxMenu(chat: number, lang: Lang, name?: string) {
+  const hi = name ? tr(lang, `Salom, ${escB(name)}! 👋`, `Здравствуйте, ${escB(name)}! 👋`) : '';
+  await html(chat, [hi, nxHelp(lang)].filter(Boolean).join('\n\n'), { reply_markup: nxKeyboard(lang) });
+  if (PANEL_PUBLIC) await html(chat, tr(lang, 'Panel saytda ham ochiladi:', 'Панель также доступна на сайте:'), { reply_markup: { inline_keyboard: [panelBtn(lang)] } });
+}
+
+async function nxSendReport(chat: number, lang: Lang, period: string) {
+  const r = await fetch(API + `/api/narxtop/report.xlsx?period=${period}&lang=${lang}`, { headers });
   if (!r.ok) throw new Error('hisobot: ' + r.status);
-  const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? 'narxtop-hisobot.xlsx');
+  const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? 'narxtop.xlsx');
   const form = new FormData();
   form.append('chat_id', String(chat));
-  form.append('caption', tr(lang, '📊 Narxtop hisoboti (joriy oy)', '📊 Отчёт NARXTOP (текущий месяц)'));
+  form.append('caption', tr(lang, '📊 Narxtop hisoboti', '📊 Отчёт NARXTOP'));
   form.append('document', new Blob([await r.arrayBuffer()]), name);
   const res = await (await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: 'POST', body: form })).json();
   if (!res.ok) throw new Error('sendDocument: ' + res.description);
+}
+
+/** Vazifalar: bajarilmaganlari tugma bo'lib chiqadi — bosilsa, karta va holat tugmalari ochiladi. */
+async function nxTasks(chat: number, lang: Lang, edit?: number) {
+  const d = await nxData();
+  const p = [...d.periods].reverse().find((x) => !x.closedAt) ?? d.periods[d.periods.length - 1];
+  const os = p ? d.orders.filter((o) => o.periodId === p.id) : [];
+  const num = new Map(os.map((o, i) => [o.id, i + 1]));
+  const open = os.filter((o) => o.status !== 'done').reverse();
+  const text = openTasksText(d, '', lang) + (open.length ? '\n\n' + tr(lang, '👇 Vazifani tanlang — holatini shu yerdan o‘zgartirasiz:', '👇 Выберите задачу — статус можно изменить прямо здесь:') : '');
+  type Btn = { text: string; callback_data?: string; url?: string };
+  const rows: Btn[][] = open.slice(0, 20).map((o) => [{ text: `${num.get(o.id)}. ${o.title.slice(0, 40)} · ${statusLabel(o.status, lang)}`, callback_data: `nx:o:${o.id}` }]);
+  if (PANEL_PUBLIC) rows.push(panelBtn(lang));
+  const body = { text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: rows } };
+  if (edit) await tg('editMessageText', { chat_id: chat, message_id: edit, ...body }).catch(() => undefined);
+  else await tg('sendMessage', { chat_id: chat, ...body });
+}
+
+/** Vazifa kartasi: ma'lumot + holat tugmalari. */
+async function nxCard(chat: number, lang: Lang, id: number, edit?: number) {
+  const d = await nxData();
+  const o = d.orders.find((x) => x.id === id);
+  if (!o) { await html(chat, tr(lang, 'Vazifa topilmadi.', 'Задача не найдена.')); return; }
+  const per = d.periods.find((p) => p.id === o.periodId);
+  const L = [`<b>${escB(o.title)}</b>`, '',
+    `${tr(lang, 'Holat', 'Статус')}: <b>${statusLabel(o.status, lang)}</b>`,
+    `${tr(lang, 'Yo‘nalish', 'Направление')}: ${o.direction ? escB(label(o.direction, lang)) : '—'}`,
+    `${tr(lang, 'Uslub', 'Стиль')}: ${o.style ? escB(label(o.style, lang)) : tr(lang, 'kiritilmagan', 'не указан')}`,
+    `${tr(lang, 'Oy', 'Месяц')}: ${escB(pnameB(per?.name ?? '', lang))} · ${o.source === 'import' ? tr(lang, 'eski jadvaldan', 'из старой таблицы') : dmyB(o.createdAt)}`];
+  if (o.videoUrl) L.push(`🎬 ${escB(o.videoUrl)}`);
+  if (o.script) L.push('', `<i>${escB(o.script.slice(0, 400))}${o.script.length > 400 ? '…' : ''}</i>`);
+  const st = STATUSES.filter((x) => x.id !== o.status).map((x) => ({ text: statusLabel(x.id, lang), callback_data: `nx:st:${o.id}:${x.id}` }));
+  const kb = [st.slice(0, 2), st.slice(2), [{ text: tr(lang, '⬅️ Vazifalar', '⬅️ К задачам'), callback_data: 'nx:tl' }, ...(PANEL_PUBLIC ? [{ text: tr(lang, '🔗 Panelda', '🔗 В панели'), url: `${PANEL_PUBLIC}/#/narxtop?v=${o.id}` }] : [])]];
+  const body = { text: L.join('\n'), parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: kb } };
+  if (edit) await tg('editMessageText', { chat_id: chat, message_id: edit, ...body }).catch(() => undefined);
+  else await tg('sendMessage', { chat_id: chat, ...body });
 }
 
 async function nxCreate(chat: number, tgId: number, text: string, files: { name: string; fileId: string }[], replyTo?: number, lang: Lang = 'uz') {
@@ -367,7 +436,27 @@ async function nxCreate(chat: number, tgId: number, text: string, files: { name:
   await html(chat, createdText(o, 'direction', lang), { reply_markup: choiceKeyboard('d', o.id, d.directions, lang), ...(replyTo ? { reply_parameters: { message_id: replyTo, allow_sending_without_reply: true } } : {}) });
 }
 
-/** true — xabar Narxtop uchun ishlandi. Ulangan foydalanuvchi (mijoz) matni darhol vazifa bo'ladi; egasidan esa so'raladi. */
+async function nxAction(a: NxAction, chat: number, lang: Lang, me: Me | null) {
+  const bs = loadBot();
+  if (a === 'add') {
+    bs.taskWait = [...new Set([...(bs.taskWait ?? []), chat])];
+    bs.payWait = (bs.payWait ?? []).filter((c) => c !== chat);
+    saveBot(bs);
+    await html(chat, tr(lang, '📝 Ssenariyni yoki vazifa nomini yuboring — matn yoki fayl (.docx, .pdf). Birinchi qator vazifa nomi bo‘ladi.', '📝 Отправьте сценарий или название задачи — текстом или файлом (.docx, .pdf). Первая строка станет названием задачи.'),
+      { reply_markup: { inline_keyboard: [[{ text: tr(lang, '✖️ Bekor qilish', '✖️ Отмена'), callback_data: 'nx:cx' }]] } });
+  } else if (a === 'tasks') await nxTasks(chat, lang);
+  else if (a === 'pay') await html(chat, payText(await nxData(), lang), { reply_markup: { inline_keyboard: [[{ text: tr(lang, '➕ To‘lov qo‘shish', '➕ Добавить оплату'), callback_data: 'nx:pa' }]] } });
+  else if (a === 'report') {
+    const d = await nxData();
+    const rows = [...d.periods].reverse().slice(0, 6).map((p) => [{ text: `${p.closedAt ? '✓ ' : '● '}${pnameB(p.name, lang)}`, callback_data: `nx:r:${p.id}` }]);
+    if (d.periods.length > 1) rows.push([{ text: tr(lang, '📚 Barcha oylar', '📚 Все месяцы'), callback_data: 'nx:r:all' }]);
+    await html(chat, tr(lang, '📊 Qaysi oy hisobotini yuboray? (Excel fayl)', '📊 Отчёт за какой месяц прислать? (файл Excel)'), { reply_markup: { inline_keyboard: rows } });
+  } else if (a === 'lang') {
+    await html(chat, 'Tilni tanlang / Выберите язык:', { reply_markup: { inline_keyboard: [[{ text: '🇺🇿 O‘zbekcha', callback_data: 'nx:l:uz' }, { text: '🇷🇺 Русский', callback_data: 'nx:l:ru' }]] } });
+  } else await nxMenu(chat, lang, me?.name);
+}
+
+/** true — xabar Narxtop uchun ishlandi. */
 async function nxMessage(m: NonNullable<Update['message']>, isOwner: boolean): Promise<boolean> {
   const text = (m.text ?? m.caption ?? '').trim();
   const cmd = text.split(/[\s@]/)[0];
@@ -375,49 +464,46 @@ async function nxMessage(m: NonNullable<Update['message']>, isOwner: boolean): P
     const code = text.split('link_')[1]?.trim();
     const r = await api<{ ok: boolean; me?: Me }>('/api/users/tg-link', { code, tgId: String(m.chat.id) });
     nxUsers.delete(m.chat.id);
-    await html(m.chat.id, r.ok && r.me ? linkedText(r.me.name, r.me.lang) : linkFailed(r.me?.lang ?? 'ru'));
-    // shu chat uchun buyruqlar menyusi ("/" tugmasi): ish beruvchiga faqat Narxtop buyruqlari
-    if (r.ok && r.me) {
-      const ru = r.me.lang === 'ru';
-      const nx = [{ command: 'vazifalar', description: ru ? 'Невыполненные задачи' : 'Bajarilmagan vazifalar' }, { command: 'excel', description: ru ? 'Отчёт за месяц (Excel)' : 'Joriy oy hisoboti (Excel)' }, { command: 'tolov', description: ru ? 'Оплаты: сколько оплачено и остаток' : 'To‘lovlar: to‘langan va qoldiq' }];
-      const commands = r.me.role === 'client' ? [...nx, { command: 'yordam', description: ru ? 'Как работает бот' : 'Bot qanday ishlaydi' }]
-        : [{ command: 'hisobot', description: 'Kunlik hisobot' }, { command: 'reja', description: 'Keyingi 7 kun' }, ...nx, { command: 'statistika', description: 'Obunachilar' }, { command: 'tasdiq', description: 'Tasdiq kutayotganlar' }];
-      await tg('setMyCommands', { commands, scope: { type: 'chat', chat_id: m.chat.id } }).catch((e: Error) => console.error(e.message));
-    }
+    if (!r.ok || !r.me) { await html(m.chat.id, linkFailed('ru')); return true; }
+    const ru = r.me.lang === 'ru';
+    const commands = [{ command: 'start', description: ru ? 'Меню' : 'Menyu' }, { command: 'vazifa', description: ru ? 'Добавить задачу' : 'Vazifa qo‘shish' }, { command: 'vazifalar', description: ru ? 'Задачи и статусы' : 'Vazifalar va holat' },
+      { command: 'tolov', description: ru ? 'Оплаты' : 'To‘lovlar' }, { command: 'excel', description: ru ? 'Отчёт за месяц (Excel)' : 'Oylik hisobot (Excel)' }, { command: 'til', description: 'Til / Язык' }];
+    await tg('setMyCommands', { commands: r.me.role === 'admin' ? [...commands, { command: 'reja', description: 'Keyingi 7 kun' }, { command: 'tasdiq', description: 'Tasdiq kutayotganlar' }] : commands, scope: { type: 'chat', chat_id: m.chat.id } }).catch((e: Error) => console.error(e.message));
+    await html(m.chat.id, `✅ <b>${tr(r.me.lang, 'Ulandi', 'Подключено')}: ${escB(r.me.name)}</b>`);
+    await nxMenu(m.chat.id, r.me.lang);
     return true;
   }
   const me = await nxUser(m.chat.id).catch(() => null);
   if (!me && !isOwner) return false;
   const lang: Lang = me?.lang ?? 'uz';
-  if (cmd === '/vazifalar') { await html(m.chat.id, openTasksText(await nxData(), PANEL_PUBLIC, lang)); return true; }
-  const payKb = { inline_keyboard: [[{ text: tr(lang, '➕ To‘lov qo‘shish', '➕ Добавить оплату'), callback_data: 'nx:pa' }]] };
-  if (cmd === '/tolov' || cmd === '/oplata') {
-    const rest = text.slice(cmd.length).trim();
-    const parsed = rest ? parseAmount(rest) : null;
-    if (parsed) { await api('/api/narxtop/tg/payment', { tgId: String(m.chat.id), ...parsed }); await html(m.chat.id, payText(await nxData(), lang)); return true; }
-    await html(m.chat.id, payText(await nxData(), lang), { reply_markup: payKb });
+  if (cmd === '/start' || cmd === '/menu') { await nxMenu(m.chat.id, lang, me?.name); return true; }
+  const act = nxActionOf(text);
+  // "/tolov 1.5 mln avans" — bir qatorda to'lov
+  if (act === 'pay' && cmd.startsWith('/') && text.slice(cmd.length).trim()) {
+    const parsed = parseAmount(text.slice(cmd.length).trim());
+    if (parsed) { await api('/api/narxtop/tg/payment', { tgId: String(m.chat.id), ...parsed }); await html(m.chat.id, `✅ ${tr(lang, 'To‘lov yozildi', 'Оплата записана')}\n\n${payText(await nxData(), lang)}`); return true; }
+  }
+  if (act) { await nxAction(act, m.chat.id, lang, me); return true; }
+  if (cmd.startsWith('/')) return false; // egasining boshqa buyruqlari (/reja, /tasdiq…)
+  const bs = loadBot();
+  if (bs.payWait?.includes(m.chat.id)) {
+    const parsed = parseAmount(text);
+    if (!parsed) { await html(m.chat.id, PAY_BAD(lang)); return true; }
+    bs.payWait = bs.payWait.filter((c) => c !== m.chat.id);
+    saveBot(bs);
+    await api('/api/narxtop/tg/payment', { tgId: String(m.chat.id), ...parsed });
+    await html(m.chat.id, `✅ ${tr(lang, 'To‘lov yozildi', 'Оплата записана')}\n\n${payText(await nxData(), lang)}`, { reply_markup: nxKeyboard(lang) });
     return true;
   }
-  {
-    const bs = loadBot();
-    if (bs.payWait?.includes(m.chat.id) && !cmd.startsWith('/')) {
-      const parsed = parseAmount(text);
-      if (!parsed) { await html(m.chat.id, PAY_BAD(lang)); return true; }
-      bs.payWait = bs.payWait.filter((c) => c !== m.chat.id);
-      saveBot(bs);
-      await api('/api/narxtop/tg/payment', { tgId: String(m.chat.id), ...parsed });
-      await html(m.chat.id, `✅ ${tr(lang, 'To‘lov yozildi', 'Оплата записана')}\n\n${payText(await nxData(), lang)}`);
-      return true;
-    }
-  }
-  if (cmd === '/excel' || (!isOwner && cmd === '/hisobot')) { await nxSendReport(m.chat.id, lang); return true; }
-  if (!isOwner && (cmd === '/start' || cmd === '/yordam' || cmd === '/help')) { await html(m.chat.id, nxHelp(lang)); return true; }
-  if (cmd.startsWith('/')) return false; // egasining boshqa buyruqlari
   const files = m.document ? [{ name: m.document.file_name ?? 'ssenariy', fileId: m.document.file_id }] : [];
   if (!text && !files.length) return false;
-  if (me?.role === 'client') { await nxCreate(m.chat.id, m.chat.id, text, files, m.message_id, lang); return true; }
-  // egasi (admin): tasodifiy xabar vazifa bo'lib ketmasin — tugma bilan so'raymiz
-  const bs = loadBot();
+  const waiting = bs.taskWait?.includes(m.chat.id);
+  if (waiting || me?.role === 'client') {
+    if (waiting) { bs.taskWait = bs.taskWait!.filter((c) => c !== m.chat.id); saveBot(bs); }
+    await nxCreate(m.chat.id, m.chat.id, text, files, m.message_id, lang);
+    return true;
+  }
+  // egasi tugmasiz yozgan xabar: tasodifan vazifa bo'lib ketmasin — so'raymiz
   bs.nx = Object.fromEntries([...Object.entries(bs.nx ?? {}).slice(-19), [String(m.message_id), { text, files }]]);
   saveBot(bs);
   await html(m.chat.id, '📥 Shu xabarni Narxtop vazifasi qilib qo‘shaymi?', { reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, reply_markup: { inline_keyboard: [[{ text: '✅ Ha, qo‘sh', callback_data: `nx:add:${m.message_id}` }, { text: 'Yo‘q', callback_data: `nx:no:${m.message_id}` }]] } });
@@ -426,14 +512,39 @@ async function nxMessage(m: NonNullable<Update['message']>, isOwner: boolean): P
 
 async function nxCallback(q: NonNullable<Update['callback_query']>, data: string) {
   const chat = q.message?.chat.id ?? q.from.id, msg = q.message?.message_id;
-  const clear = () => msg && tg('editMessageReplyMarkup', { chat_id: chat, message_id: msg, reply_markup: { inline_keyboard: [] } });
+  const clear = () => msg && tg('editMessageReplyMarkup', { chat_id: chat, message_id: msg, reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
   const [, kind, a, b] = data.split(':');
+  const me = await nxUser(q.from.id).catch(() => null);
+  const lang: Lang = me?.lang ?? 'uz';
+  if (kind === 'l' && (a === 'uz' || a === 'ru')) {
+    await api('/api/users/tg-lang', { tgId: String(q.from.id), lang: a });
+    nxUsers.delete(q.from.id);
+    await clear();
+    await nxMenu(chat, a, me?.name);
+    return;
+  }
+  if (kind === 'cx') {
+    const bs = loadBot();
+    bs.taskWait = (bs.taskWait ?? []).filter((c) => c !== chat);
+    bs.payWait = (bs.payWait ?? []).filter((c) => c !== chat);
+    saveBot(bs);
+    if (msg) await tg('editMessageText', { chat_id: chat, message_id: msg, text: tr(lang, 'Bekor qilindi.', 'Отменено.') }).catch(() => undefined);
+    return;
+  }
+  if (kind === 'r') { await nxSendReport(chat, lang, a); return; }
+  if (kind === 'tl') { await nxTasks(chat, lang, msg); return; }
+  if (kind === 'o') { await nxCard(chat, lang, Number(a), msg); return; }
+  if (kind === 'st') {
+    await api(`/api/narxtop/tg/order/${a}`, { tgId: String(q.from.id), status: b });
+    await nxCard(chat, lang, Number(a), msg);
+    return;
+  }
   if (kind === 'pa') {
-    const lang: Lang = (await nxUser(q.from.id).catch(() => null))?.lang ?? 'uz';
     const bs = loadBot();
     bs.payWait = [...new Set([...(bs.payWait ?? []), chat])];
+    bs.taskWait = (bs.taskWait ?? []).filter((c) => c !== chat);
     saveBot(bs);
-    await html(chat, PAY_ASK(lang));
+    await html(chat, PAY_ASK(lang), { reply_markup: { inline_keyboard: [[{ text: tr(lang, '✖️ Bekor qilish', '✖️ Отмена'), callback_data: 'nx:cx' }]] } });
     return;
   }
   if (kind === 'pc') {
@@ -449,11 +560,10 @@ async function nxCallback(q: NonNullable<Update['callback_query']>, data: string
     saveBot(bs);
     if (kind === 'no' || !item) { await clear(); if (msg) await tg('editMessageText', { chat_id: chat, message_id: msg, text: kind === 'no' ? 'Qo‘shilmadi.' : 'Xabar topilmadi, qayta yuboring.' }); return; }
     if (msg) await tg('deleteMessage', { chat_id: chat, message_id: msg }).catch(() => undefined);
-    await nxCreate(chat, q.from.id, item.text, item.files, Number(a), (await nxUser(q.from.id).catch(() => null))?.lang ?? 'uz');
+    await nxCreate(chat, q.from.id, item.text, item.files, Number(a), lang);
     return;
   }
   if (kind !== 'd' && kind !== 's') return;
-  const lang: Lang = (await nxUser(q.from.id).catch(() => null))?.lang ?? 'uz';
   const d = await nxData();
   const list = kind === 'd' ? d.directions : d.styles;
   const idx = Number(b);

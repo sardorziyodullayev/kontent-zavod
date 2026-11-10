@@ -126,8 +126,20 @@ export function logLabel(text: string, lang: Lang): string {
 const escH = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export const nxHelp = (lang: Lang) => lang === 'ru'
-  ? ['🎬 <b>Задачи NARXTOP</b>', '', '• Отправьте сюда сценарий (текст или файл) — в панели появится задача.', '• /vazifalar — невыполненные задачи и их статус', '• /excel — отчёт за текущий месяц (Excel)', '• /tolov — оплаты: сколько оплачено, остаток и кнопка «Добавить оплату»', '', 'Когда видео готово или его нужно проверить, бот напишет сам.'].join('\n')
-  : ['🎬 <b>Narxtop vazifalari</b>', '', '• Ssenariyni shu yerga yuboring (matn yoki fayl) — panelda vazifa bo‘lib tushadi.', '• /vazifalar — bajarilmagan vazifalar va holati', '• /excel — joriy oy hisoboti (Excel fayl)', '• /tolov — to‘lovlar: to‘langan, qoldiq va “To‘lov qo‘shish” tugmasi', '', 'Video tayyor bo‘lsa yoki tekshirish kerak bo‘lsa, bot o‘zi xabar beradi.'].join('\n');
+  ? ['🎬 <b>Задачи NARXTOP</b> — кнопки внизу:', '',
+    '📝 <b>Добавить задачу</b> — отправьте сценарий текстом или файлом',
+    '📋 <b>Задачи</b> — невыполненные задачи; нажмите на задачу, чтобы изменить статус',
+    '💰 <b>Оплаты</b> — сколько оплачено, остаток, добавить оплату',
+    '📊 <b>Отчёт за месяц</b> — файл Excel за любой месяц',
+    '🌐 <b>Язык</b> — узбекский или русский', '',
+    'Когда видео готово или его нужно проверить, бот напишет сам.'].join('\n')
+  : ['🎬 <b>Narxtop vazifalari</b> — pastdagi tugmalar:', '',
+    '📝 <b>Vazifa qo‘shish</b> — ssenariyni matn yoki fayl qilib yuboring',
+    '📋 <b>Vazifalar</b> — bajarilmaganlar; vazifani bosib holatini o‘zgartirasiz',
+    '💰 <b>To‘lovlar</b> — to‘langan, qoldiq, to‘lov qo‘shish',
+    '📊 <b>Oylik hisobot</b> — istalgan oy bo‘yicha Excel fayl',
+    '🌐 <b>Til</b> — o‘zbekcha yoki ruscha', '',
+    'Video tayyor bo‘lsa yoki tekshirish kerak bo‘lsa, bot o‘zi xabar beradi.'].join('\n');
 
 export const linkedText = (name: string, lang: Lang) => `✅ <b>${tr(lang, 'Ulandi', 'Подключено')}: ${escH(name)}</b>\n\n${nxHelp(lang)}`;
 export const linkFailed = (lang: Lang) => tr(lang, '❌ Havola eskirgan yoki noto‘g‘ri. Paneldagi “Telegram’ni ulash” tugmasini qayta bosing.', '❌ Ссылка устарела или неверна. Нажмите «Подключить Telegram» в панели ещё раз.');
