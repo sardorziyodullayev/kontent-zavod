@@ -99,11 +99,11 @@ export function NarxtopPage({ me }: { me: MeInfo | null }) {
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       {/* 1. Oylar va asosiy tugmalar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1 shadow-card" role="tablist" aria-label={L('Ish oyi', 'Месяц')}>
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1 shadow-card [scrollbar-width:none] max-sm:w-full [&::-webkit-scrollbar]:hidden" role="tablist" aria-label={L('Ish oyi', 'Месяц')}>
           {d.periods.length > 1 && (
             <button role="tab" aria-selected={overview} onClick={() => pick(-1)} title={L('Barcha oylar: natija va to‘lovlar', 'Все месяцы: итоги и оплаты')}
               className={cn('flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-medium text-ink-2 hover:text-ink', overview && 'bg-accent font-semibold text-accent-ink hover:text-accent-ink')}>
-              <Layers size={15} />{L('Barcha oylar', 'Все месяцы')}
+              <Layers size={15} /><span className="max-sm:sr-only">{L('Barcha oylar', 'Все месяцы')}</span>
             </button>
           )}
           {d.periods.map((p) => (
@@ -116,11 +116,11 @@ export function NarxtopPage({ me }: { me: MeInfo | null }) {
           ))}
           <button className="flex shrink-0 items-center gap-1 rounded-full px-3 py-2 text-[13px] text-muted hover:text-ink" onClick={() => setPeriodOpen(true)}><CalendarPlus size={15} />{L('Yangi oy', 'Новый месяц')}</button>
         </div>
-        <div className="ml-auto flex flex-wrap gap-2">
-          <Button variant="dark" onClick={() => downloadAuthed(`/narxtop/report.xlsx?period=${overview ? 'all' : period?.id ?? ''}&lang=${lang()}`, 'narxtop-report.xlsx').catch((e: Error) => alert(e.message))} disabled={!period && !overview}>
+        <div className="ml-auto grid grid-cols-2 gap-2 max-sm:w-full sm:flex">
+          <Button variant="dark" className="justify-center" onClick={() => downloadAuthed(`/narxtop/report.xlsx?period=${overview ? 'all' : period?.id ?? ''}&lang=${lang()}`, 'narxtop-report.xlsx').catch((e: Error) => alert(e.message))} disabled={!period && !overview}>
             <Download size={16} />{overview ? L('Excel: barcha oylar', 'Excel: все месяцы') : L('Excel hisobot', 'Отчёт Excel')}
           </Button>
-          <Button variant="primary" onClick={() => setNewOpen(true)}><Plus size={17} />{L('Yangi vazifa', 'Новая задача')}</Button>
+          <Button variant="primary" className="justify-center" onClick={() => setNewOpen(true)}><Plus size={17} />{L('Yangi vazifa', 'Новая задача')}</Button>
         </div>
       </div>
 
@@ -165,9 +165,9 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
           <Button size="sm" variant="ghost" onClick={() => confirm(L(`${pn} qayta ochilsinmi?`, `Открыть ${pn} снова?`)) && mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { closed: false } })}><RotateCcw size={14} />{L('Qayta ochish', 'Открыть снова')}</Button>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-          <span className="size-2 rounded-full bg-accent" /><span><b className="text-ink">{pn}</b> — {L('joriy oy', 'текущий месяц')}</span>
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => confirm(L(`${pn} yakunlansinmi? Oy hisobot uchun saqlanadi; kerak bo‘lsa qayta ochish mumkin.`, `Завершить ${pn}? Месяц сохранится для отчёта; при необходимости его можно открыть снова.`)) && mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { closed: true } })}>
+        <div className="flex items-center gap-2 text-[13px] text-muted">
+          <span className="size-2 shrink-0 rounded-full bg-accent" /><span><b className="text-ink">{pn}</b> — {L('joriy oy', 'текущий месяц')}</span>
+          <Button size="sm" variant="ghost" className="ml-auto max-sm:px-2" onClick={() => confirm(L(`${pn} yakunlansinmi? Oy hisobot uchun saqlanadi; kerak bo‘lsa qayta ochish mumkin.`, `Завершить ${pn}? Месяц сохранится для отчёта; при необходимости его можно открыть снова.`)) && mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { closed: true } })}>
             <CalendarCheck size={14} />{L('Oyni yakunlash', 'Завершить месяц')}
           </Button>
         </div>
@@ -178,7 +178,7 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
         <Stat label={L('Tayyor', 'Готово')} value={s.done} sub={s.total ? `${Math.round((s.done / s.total) * 100)}%` : '—'}><Meter value={s.total ? s.done / s.total : 0} className="mt-2" /></Stat>
         <Stat label={L('Ishda', 'В работе')} value={s.open} warn={s.byStatus.fix > 0}
           sub={s.byStatus.fix ? L(`${s.byStatus.fix} ta tuzatishda`, `на правках: ${s.byStatus.fix}`) : s.byStatus.new ? L(`${s.byStatus.new} ta yangi`, `новых: ${s.byStatus.new}`) : L('hammasi joyida', 'всё в порядке')} />
-        <Stat label={L('To‘lov qoldig‘i', 'Остаток оплаты')} value={s.price ? som(s.left) : '—'} sub={s.price ? `${som(s.paid)} / ${som(s.price)} ${cur()}` : L('oy summasi kiritilmagan', 'сумма месяца не указана')} warn={s.left > 0} />
+        <Stat label={L('To‘lov qoldig‘i', 'Остаток оплаты')} value={s.price ? som(s.left) : '—'} sub={s.price ? `${L('dan', 'из')} ${som(s.price)}` : L('summa kiritilmagan', 'сумма не указана')} warn={s.left > 0} />
       </div>
 
       <Payments period={period} pays={pays} price={s.price} paid={s.paid} left={s.left} pending={s.pending} me={me} />
@@ -204,7 +204,7 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
               <input className="min-w-0 flex-1 bg-transparent text-[13.5px] outline-none" placeholder={L('Qidirish…', 'Поиск…')} value={text} onChange={(e) => setText(e.target.value)} />
             </label>
           </div>
-          <div className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1">
+          <div className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabs.map((t) => (
               <button key={t.id} onClick={() => setFilter(t.id)} aria-pressed={filter === t.id}
                 className={cn('shrink-0 rounded-full border border-line px-3 py-1.5 text-[13px] text-ink-2 hover:text-ink', filter === t.id && 'border-transparent bg-accent font-semibold text-accent-ink hover:text-accent-ink')}>
@@ -213,12 +213,12 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
             ))}
           </div>
           {!list.length ? <Empty>{os.length ? L('Bu filtrda vazifa yo‘q.', 'В этом фильтре задач нет.') : L('Bu oyda hali vazifa yo‘q. “Yangi vazifa” tugmasini bosing.', 'В этом месяце задач пока нет. Нажмите «Новая задача».')}</Empty> : (
-            <ul className="grid gap-1.5">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
               {list.map((o) => (
-                <li key={o.id} className="group flex items-center gap-3 rounded-[16px] border border-line px-3 py-2.5 hover:bg-surface-2">
-                  <span className="w-7 shrink-0 text-right font-display text-[13px] text-muted tnum">{num.get(o.id)}</span>
+                <li key={o.id} className="group flex min-w-0 items-center gap-2.5 rounded-[16px] border border-line px-2.5 py-2.5 hover:bg-surface-2 sm:gap-3 sm:px-3">
+                  <span className="w-6 shrink-0 text-right font-display text-[13px] text-muted tnum sm:w-7">{num.get(o.id)}</span>
                   <button className="min-w-0 flex-1 text-left" onClick={() => open(o.id)}>
-                    <span className="block truncate text-[14.5px] font-medium">{o.title}</span>
+                    <span className="line-clamp-2 text-[14.5px] leading-snug font-medium sm:line-clamp-1">{o.title}</span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
                       <StyleChip style={o.style} />
                       {o.direction && <span>{nm(o.direction)}</span>}
@@ -271,7 +271,20 @@ function MonthsOverview({ d, pick }: { d: NarxtopData; pick: (id: number) => voi
       </div>
       <Card className="min-w-0">
         <CardHead title={L('Oylar bo‘yicha', 'По месяцам')} sub={L('qatorni bossangiz, o‘sha oy ochiladi', 'нажмите на строку, чтобы открыть месяц')} />
-        <div className="-mx-1 overflow-x-auto px-1">
+        <ul className="grid gap-2 sm:hidden">
+          {rows.map(({ p, s }) => (
+            <li key={p.id}>
+              <button className="grid w-full gap-1.5 rounded-[16px] border border-line px-3.5 py-3 text-left text-[13.5px] hover:bg-surface-2" onClick={() => pick(p.id)}>
+                <span className="flex items-center gap-2"><b className="text-[15px]">{periodName(p.name)}</b>
+                  {p.closedAt ? <span className="inline-flex items-center gap-1 text-[12px] text-good-text"><Check size={13} strokeWidth={2.6} />{L('yakunlangan', 'завершён')}</span> : <span className="inline-flex items-center gap-1.5 text-[12px]"><span className="size-2 rounded-full bg-accent" />{L('joriy', 'текущий')}</span>}
+                  <span className="ml-auto text-muted tnum">{s.done}/{s.total} {L('video', 'видео')}</span></span>
+                <span className="flex justify-between text-muted"><span>{L('To‘langan', 'Оплачено')}</span><b className="text-ink tnum">{som(s.paid)}{s.price ? ` / ${som(s.price)}` : ''}</b></span>
+                {s.price > 0 && <span className="flex justify-between text-muted"><span>{L('Qoldiq', 'Остаток')}</span><b className={cn('tnum', s.left ? 'text-critical-text' : 'text-good-text')}>{som(s.left)}</b></span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="-mx-1 hidden overflow-x-auto px-1 sm:block">
           <table className="w-full min-w-[620px] text-[13.5px]">
             <thead><tr className="text-left text-[12px] text-muted">
               <th className="pb-2 font-medium">{L('Oy', 'Месяц')}</th><th className="pb-2 font-medium">{L('Holat', 'Статус')}</th><th className="pb-2 text-right font-medium">{L('Video', 'Видео')}</th><th className="pb-2 text-right font-medium">{L('Tayyor', 'Готово')}</th>
@@ -329,10 +342,10 @@ function Payments({ period, pays, price, paid, left, pending, me }: { period: Pe
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Wallet size={19} className="text-accent-text" />
         <h2 className="card-title">{L('To‘lovlar', 'Оплаты')} · {periodName(period.name)}</h2>
-        <Button variant="primary" className="ml-auto" onClick={() => { setAmount(''); mut.reset(); setAdding(true); }}><Plus size={16} />{L('To‘lov qo‘shish', 'Добавить оплату')}</Button>
+        <Button variant="primary" className="justify-center max-sm:order-last max-sm:w-full sm:ml-auto" onClick={() => { setAmount(''); mut.reset(); setAdding(true); }}><Plus size={16} />{L('To‘lov qo‘shish', 'Добавить оплату')}</Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-[16px] bg-surface-2 px-4 py-3">
+        <div className="flex items-center justify-between gap-2 rounded-[16px] bg-surface-2 px-4 py-2.5 sm:block sm:py-3">
           <div className="text-[12.5px] text-muted">{L('Oy uchun kelishilgan summa', 'Сумма за месяц')}</div>
           {editPrice ? (
             <form className="mt-1 flex gap-1" onSubmit={(e) => { e.preventDefault(); mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { price: new FormData(e.currentTarget).get('price') } }); setEditPrice(false); }}>
@@ -340,20 +353,20 @@ function Payments({ period, pays, price, paid, left, pending, me }: { period: Pe
               <Button size="icon" type="submit" variant="primary" aria-label={L('Saqlash', 'Сохранить')}><Check size={15} /></Button>
             </form>
           ) : (
-            <button className="mt-0.5 font-display text-[22px] font-semibold tnum underline decoration-dotted decoration-1 underline-offset-[6px] hover:text-accent-text" title={L('O‘zgartirish', 'Изменить')} onClick={() => setEditPrice(true)}>
+            <button className="font-display text-[19px] font-semibold tnum underline sm:mt-0.5 sm:text-[22px] decoration-dotted decoration-1 underline-offset-[6px] hover:text-accent-text" title={L('O‘zgartirish', 'Изменить')} onClick={() => setEditPrice(true)}>
               {price ? `${som(price)}` : L('kiritish', 'указать')}
             </button>
           )}
         </div>
-        <div className="rounded-[16px] bg-surface-2 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 rounded-[16px] bg-surface-2 px-4 py-2.5 sm:block sm:py-3">
           <div className="text-[12.5px] text-muted">{L('To‘langan', 'Оплачено')}</div>
-          <div className="mt-0.5 font-display text-[22px] font-semibold text-good-text tnum">{som(paid)}</div>
-          {pending > 0 && <div className="text-[12px] text-muted">⏳ {L(`${som(pending)} tasdiq kutmoqda`, `${som(pending)} ждёт подтверждения`)}</div>}
+          <div className="font-display text-[19px] font-semibold text-good-text tnum sm:mt-0.5 sm:text-[22px]">{som(paid)}</div>
+          {pending > 0 && <div className="w-full text-[12px] text-muted max-sm:text-right">⏳ {L(`${som(pending)} tasdiq kutmoqda`, `${som(pending)} ждёт подтверждения`)}</div>}
         </div>
-        <div className="rounded-[16px] bg-surface-2 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 rounded-[16px] bg-surface-2 px-4 py-2.5 sm:block sm:py-3">
           <div className="text-[12.5px] text-muted">{L('Qoldiq', 'Осталось оплатить')}</div>
-          <div className={cn('mt-0.5 font-display text-[22px] font-semibold tnum', left ? 'text-critical-text' : 'text-good-text')}>{price ? som(left) : '—'}</div>
-          {price > 0 && !left && <div className="text-[12px] text-good-text">{L('to‘liq to‘langan ✓', 'оплачено полностью ✓')}</div>}
+          <div className={cn('font-display text-[19px] font-semibold tnum sm:mt-0.5 sm:text-[22px]', left ? 'text-critical-text' : 'text-good-text')}>{price ? som(left) : '—'}</div>
+          {price > 0 && !left && <div className="w-full text-[12px] text-good-text max-sm:text-right">{L('to‘liq to‘langan ✓', 'оплачено полностью ✓')}</div>}
         </div>
       </div>
       {price > 0 && <Meter value={pct} className="mt-3" />}
@@ -482,7 +495,7 @@ function OrderSheet({ o, d, me, onClose }: { o: Order; d: NarxtopData; me: MeInf
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-[12px] text-muted">#{o.id} · {periodName(period?.name ?? '')} · {o.source === 'import' ? L('eski jadvaldan', 'из старой таблицы') : dmy(o.createdAt)} · {o.createdBy || '—'}{o.source === 'telegram' ? ' · Telegram' : ''}</div>
-          <input className="mt-0.5 w-full bg-transparent font-display text-[19px] font-semibold tracking-[-0.02em] outline-none" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} aria-label={L('Vazifa nomi', 'Название задачи')} />
+          <textarea rows={Math.min(3, Math.max(1, Math.ceil(f.title.length / (innerWidth < 640 ? 24 : 48))))} className="mt-0.5 block w-full min-w-0 resize-none bg-transparent font-display text-[17px] leading-snug font-semibold tracking-[-0.02em] outline-none sm:text-[19px]" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} aria-label={L('Vazifa nomi', 'Название задачи')} />
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} aria-label={L('Yopish', 'Закрыть')}>✕</Button>
       </div>
