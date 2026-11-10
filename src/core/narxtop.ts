@@ -27,7 +27,8 @@ export const statusRu = (s: OrderStatus) => STATUSES.find((x) => x.id === s)?.ru
 
 /** Jadvaldagi mavjud yo'nalishlar (bir xil yozilsin: "Аавтосалоны"/"Автосалон" → "Avtosalonlar"). */
 export const DEFAULT_DIRECTIONS = ['NARXTOP', 'Internet', 'Novostroyka', 'Avtosalonlar', 'MFO', 'Banklar', 'Serial', 'Reklama', 'Hamkorlar', 'O‘quv video', 'Alohida'];
-export const DEFAULT_STYLES = ['Multfilm', 'Real', 'Moushn'];
+/** Video uslubi: motion, 2D animatsiya (multfilm), realistik. */
+export const DEFAULT_STYLES = ['Motion', '2D animatsiya', 'Realistik'];
 
 /** Erkin yozilgan yo'nalishni ro'yxatdagisiga moslaydi (katta-kichik harf, ortiqcha bo'sh joy, ruscha nomlar). */
 export function normalizeDirection(raw: string, known: string[] = DEFAULT_DIRECTIONS): string {
@@ -47,9 +48,9 @@ export function normalizeDirection(raw: string, known: string[] = DEFAULT_DIRECT
 export function normalizeStyle(raw: string): string {
   const k = raw.trim().toLowerCase();
   if (!k) return '';
-  if (/мульт|mult/.test(k)) return 'Multfilm';
-  if (/реал|real/.test(k)) return 'Real';
-  if (/моушн|motion|moushn/.test(k)) return 'Moushn';
+  if (/мульт|mult|2d|anim|аним/.test(k)) return '2D animatsiya';
+  if (/реал|real/.test(k)) return 'Realistik';
+  if (/моушн|motion|moushn|моушен/.test(k)) return 'Motion';
   return raw.trim();
 }
 
@@ -98,7 +99,7 @@ export const tr = (lang: Lang, uz: string, ru: string) => (lang === 'ru' ? ru : 
 const NAME_RU: Record<string, string> = {
   NARXTOP: 'NARXTOP', Internet: 'Интернет', Novostroyka: 'Новостройки', Avtosalonlar: 'Автосалоны', MFO: 'МФО', Banklar: 'Банки',
   Serial: 'Сериал', Reklama: 'Реклама', Hamkorlar: 'Партнёры', 'O‘quv video': 'Обучающие', Alohida: 'Отдельно',
-  Multfilm: 'Мультик', Real: 'Реал', Moushn: 'Моушн', 'Ko‘rsatilmagan': 'Не указано',
+  Motion: 'Моушн', '2D animatsiya': '2D-анимация', Realistik: 'Реалистичный', 'Ko‘rsatilmagan': 'Не указано',
 };
 export const label = (name: string, lang: Lang) => (lang === 'ru' ? NAME_RU[name] ?? name : name);
 export const statusLabel = (s: OrderStatus, lang: Lang) => (lang === 'ru' ? statusRu(s) : statusName(s));

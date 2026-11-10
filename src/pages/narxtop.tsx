@@ -1,7 +1,7 @@
 // Narxtop bo'limi: ish beruvchi yuboradigan vazifalar (ssenariylar), holati, to'lovlar va Excel hisobot.
 // Ikki kishi ishlatadi: ish beruvchi (mijoz roli, odatda rus tilida) va Sardor (admin). Hamma narsa bir qarashda tushunarli bo'lsin.
-import { CalendarCheck, CalendarPlus, Check, Download, ExternalLink, FileText, Layers, MessageSquare, Plus, RotateCcw, Search, Send, Trash2, Wallet } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { CalendarCheck, CalendarPlus, Check, ChevronDown, Download, ExternalLink, FileText, Layers, MessageSquare, Plus, RotateCcw, Search, Send, Trash2, Wallet } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { STATUSES, label, logLabel, som, statusHint, statusLabel, summarize, type NarxtopData, type Order, type OrderStatus, type Period } from '@/core/narxtop';
 import { Button } from '@/components/ui/button';
 import { Modal, Sheet } from '@/components/ui/dialog';
@@ -30,6 +30,48 @@ const TONE: Record<OrderStatus, string> = {
   fix: 'bg-[color-mix(in_srgb,var(--critical)_20%,transparent)] text-critical-text',
   done: 'bg-[color-mix(in_srgb,var(--good)_22%,transparent)] text-good-text',
 };
+
+const DOT: Record<OrderStatus, string> = { new: 'bg-muted', work: 'bg-warning', review: 'bg-[var(--s-youtube)]', fix: 'bg-critical', done: 'bg-good' };
+
+/** Holatni tanlash: o'z menyusi (brauzerning oddiy select'i mavzuga moslashmaydi). Tashqariga bosilsa yoki Esc — yopiladi. */
+function StatusMenu({ value, onChange }: { value: OrderStatus; onChange: (s: OrderStatus) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', off);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label={L('Holat', 'Статус')} onClick={() => setOpen(!open)}
+        className={cn('inline-flex h-8 items-center gap-1.5 rounded-full pr-2 pl-3 text-[12.5px] font-semibold whitespace-nowrap transition-[filter] hover:brightness-110', TONE[value])}>
+        {st(value)}<ChevronDown size={14} className={cn('opacity-70 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div role="menu" className="absolute top-[calc(100%+6px)] right-0 z-30 grid w-[200px] gap-0.5 rounded-[16px] border border-line bg-surface p-1.5 shadow-pop">
+          {STATUSES.map((x) => (
+            <button key={x.id} role="menuitemradio" aria-checked={x.id === value} type="button" onClick={() => { setOpen(false); if (x.id !== value) onChange(x.id); }}
+              className={cn('flex items-center gap-2.5 rounded-[11px] px-2.5 py-2 text-left text-[13.5px] text-ink-2 hover:bg-surface-2 hover:text-ink', x.id === value && 'bg-surface-2 font-semibold text-ink')}>
+              <span className={cn('size-2.5 shrink-0 rounded-full', DOT[x.id])} />
+              <span className="flex-1">{st(x.id)}</span>
+              {x.id === value && <Check size={14} strokeWidth={2.6} className="text-accent-text" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Uslub belgisi: Motion / 2D animatsiya / Realistik; kiritilmagan bo'lsa — sezilarli eslatma. */
+function StyleChip({ style }: { style: string }) {
+  if (!style) return <span className="rounded-full border border-dashed border-line-2 px-2 py-px text-[11.5px] text-muted">{L('uslub kiritilmagan', 'стиль не указан')}</span>;
+  return <span className="rounded-full bg-surface-3 px-2 py-px text-[11.5px] font-medium text-ink-2">{nm(style)}</span>;
+}
 
 const LS_PERIOD = 'kz-narxtop-period';
 
@@ -60,22 +102,22 @@ export function NarxtopPage({ me }: { me: MeInfo | null }) {
         <div className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1 shadow-card" role="tablist" aria-label={L('Ish oyi', 'Месяц')}>
           {d.periods.length > 1 && (
             <button role="tab" aria-selected={overview} onClick={() => pick(-1)} title={L('Barcha oylar: natija va to‘lovlar', 'Все месяцы: итоги и оплаты')}
-              className={cn('flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-medium text-ink-2 hover:text-ink', overview && 'bg-pill font-semibold text-pill-ink hover:text-pill-ink')}>
+              className={cn('flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-medium text-ink-2 hover:text-ink', overview && 'bg-accent font-semibold text-accent-ink hover:text-accent-ink')}>
               <Layers size={15} />{L('Barcha oylar', 'Все месяцы')}
             </button>
           )}
           {d.periods.map((p) => (
             <button key={p.id} role="tab" aria-selected={p.id === period?.id} onClick={() => pick(p.id)} title={p.closedAt ? `${L('Yakunlangan', 'Завершён')}: ${dmy(p.closedAt)}` : L('Joriy oy', 'Текущий месяц')}
               className={cn('flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-medium text-ink-2 hover:text-ink', p.closedAt && 'text-muted',
-                p.id === period?.id && 'bg-pill font-semibold text-pill-ink hover:text-pill-ink')}>
-              {p.closedAt ? <Check size={14} strokeWidth={2.6} className="text-good-text" /> : <span className="size-2 rounded-full bg-accent ring-2 ring-[var(--accent-wash)]" />}
+                p.id === period?.id && 'bg-accent font-semibold text-accent-ink hover:text-accent-ink')}>
+              {p.closedAt ? <Check size={14} strokeWidth={2.6} className={p.id === period?.id ? '' : 'text-good-text'} /> : <span className={cn('size-2 rounded-full', p.id === period?.id ? 'bg-accent-ink' : 'bg-accent ring-2 ring-[var(--accent-wash)]')} />}
               {periodName(p.name)}
             </button>
           ))}
           <button className="flex shrink-0 items-center gap-1 rounded-full px-3 py-2 text-[13px] text-muted hover:text-ink" onClick={() => setPeriodOpen(true)}><CalendarPlus size={15} />{L('Yangi oy', 'Новый месяц')}</button>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
-          <Button variant="dark" onClick={() => downloadAuthed(`/narxtop/report.xlsx?period=${overview ? 'all' : period?.id ?? ''}`, 'narxtop-report.xlsx').catch((e: Error) => alert(e.message))} disabled={!period && !overview}>
+          <Button variant="dark" onClick={() => downloadAuthed(`/narxtop/report.xlsx?period=${overview ? 'all' : period?.id ?? ''}&lang=${lang()}`, 'narxtop-report.xlsx').catch((e: Error) => alert(e.message))} disabled={!period && !overview}>
             <Download size={16} />{overview ? L('Excel: barcha oylar', 'Excel: все месяцы') : L('Excel hisobot', 'Отчёт Excel')}
           </Button>
           <Button variant="primary" onClick={() => setNewOpen(true)}><Plus size={17} />{L('Yangi vazifa', 'Новая задача')}</Button>
@@ -165,7 +207,7 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
           <div className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1">
             {tabs.map((t) => (
               <button key={t.id} onClick={() => setFilter(t.id)} aria-pressed={filter === t.id}
-                className={cn('shrink-0 rounded-full border border-line px-3 py-1.5 text-[13px] text-ink-2 hover:text-ink', filter === t.id && 'border-transparent bg-pill font-semibold text-pill-ink hover:text-pill-ink')}>
+                className={cn('shrink-0 rounded-full border border-line px-3 py-1.5 text-[13px] text-ink-2 hover:text-ink', filter === t.id && 'border-transparent bg-accent font-semibold text-accent-ink hover:text-accent-ink')}>
                 {t.name} <span className="tnum opacity-60">{t.n}</span>
               </button>
             ))}
@@ -177,19 +219,16 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
                   <span className="w-7 shrink-0 text-right font-display text-[13px] text-muted tnum">{num.get(o.id)}</span>
                   <button className="min-w-0 flex-1 text-left" onClick={() => open(o.id)}>
                     <span className="block truncate text-[14.5px] font-medium">{o.title}</span>
-                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted">
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
+                      <StyleChip style={o.style} />
                       {o.direction && <span>{nm(o.direction)}</span>}
-                      {o.style && <span>· {nm(o.style)}</span>}
                       <span>· {o.source === 'import' ? L('eski jadvaldan', 'из старой таблицы') : dmy(o.createdAt)}</span>
                       {o.deadline && o.status !== 'done' && <span className={cn(o.deadline < Date.now() && 'font-semibold text-critical-text')}>· {L('muddat', 'срок')} {dmy(o.deadline)}</span>}
                       {o.source === 'telegram' && <span title="Telegram">· <Send size={11} className="inline" /></span>}
                     </span>
                   </button>
                   {o.videoUrl && <a href={o.videoUrl} target="_blank" rel="noreferrer" className="hidden text-muted hover:text-ink sm:block" title={L('Videoni ochish', 'Открыть видео')}><ExternalLink size={16} /></a>}
-                  <select aria-label={L('Holat', 'Статус')} value={o.status} onChange={(e) => mut.mutate({ path: `/orders/${o.id}`, method: 'PATCH', body: { status: e.target.value } })}
-                    className={cn('h-8 shrink-0 cursor-pointer appearance-none rounded-full border-0 px-3 text-center text-[12.5px] font-semibold outline-none', TONE[o.status])}>
-                    {STATUSES.map((x) => <option key={x.id} value={x.id}>{st(x.id)}</option>)}
-                  </select>
+                  <StatusMenu value={o.status} onChange={(s) => mut.mutate({ path: `/orders/${o.id}`, method: 'PATCH', body: { status: s } })} />
                 </li>
               ))}
             </ul>
@@ -249,7 +288,7 @@ function MonthsOverview({ d, pick }: { d: NarxtopData; pick: (id: number) => voi
                   <td className="text-right tnum">{som(s.paid)}</td>
                   <td className={cn('text-right tnum', s.left > 0 && 'font-semibold text-critical-text')}>{s.price ? som(s.left) : '—'}</td>
                   <td className="text-right">
-                    <Button size="icon-sm" variant="ghost" aria-label={`${p.name} Excel`} title={L('Shu oy Excel hisoboti', 'Отчёт Excel за этот месяц')} onClick={(e) => { e.stopPropagation(); downloadAuthed(`/narxtop/report.xlsx?period=${p.id}`, 'narxtop-report.xlsx').catch((x: Error) => alert(x.message)); }}><Download size={15} /></Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`${p.name} Excel`} title={L('Shu oy Excel hisoboti', 'Отчёт Excel за этот месяц')} onClick={(e) => { e.stopPropagation(); downloadAuthed(`/narxtop/report.xlsx?period=${p.id}&lang=${lang()}`, 'narxtop-report.xlsx').catch((x: Error) => alert(x.message)); }}><Download size={15} /></Button>
                   </td>
                 </tr>
               ))}

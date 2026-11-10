@@ -350,7 +350,7 @@ const nxData = () => api<NarxtopData>('/api/narxtop');
 const PANEL_PUBLIC = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '';
 
 async function nxSendReport(chat: number, lang: Lang) {
-  const r = await fetch(API + '/api/narxtop/report.xlsx', { headers });
+  const r = await fetch(API + `/api/narxtop/report.xlsx?lang=${lang}`, { headers });
   if (!r.ok) throw new Error('hisobot: ' + r.status);
   const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? 'narxtop-hisobot.xlsx');
   const form = new FormData();

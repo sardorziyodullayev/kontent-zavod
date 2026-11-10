@@ -18,8 +18,10 @@ describe('narxtop', () => {
     expect(N.normalizeDirection('banklar')).toBe('Banklar');
     expect(N.normalizeDirection('')).toBe('');
     expect(N.normalizeDirection('yangi tur')).toBe('Yangi tur');
-    expect(N.normalizeStyle('Мультик ')).toBe('Multfilm');
-    expect(N.normalizeStyle('реал')).toBe('Real');
+    expect(N.normalizeStyle('Мультик ')).toBe('2D animatsiya');
+    expect(N.normalizeStyle('2D animation')).toBe('2D animatsiya');
+    expect(N.normalizeStyle('реал')).toBe('Realistik');
+    expect(N.normalizeStyle('Motion')).toBe('Motion');
   });
 
   test('sarlavha ssenariyning birinchi mazmunli qatoridan', () => {
@@ -59,7 +61,7 @@ describe('narxtop', () => {
 
   test('rus tili: nomlar, holatlar, tarix va bot matni', () => {
     expect(N.label('Avtosalonlar', 'ru')).toBe('Автосалоны');
-    expect(N.label('Multfilm', 'ru')).toBe('Мультик');
+    expect(N.label('2D animatsiya', 'ru')).toBe('2D-анимация');
     expect(N.label('Yangi tur', 'ru')).toBe('Yangi tur');
     expect(N.label('Avtosalonlar', 'uz')).toBe('Avtosalonlar');
     expect(N.statusLabel('fix', 'ru')).toBe('Правки');
@@ -67,7 +69,7 @@ describe('narxtop', () => {
     expect(N.logLabel('Yo‘nalish: MFO', 'ru')).toBe('Направление: МФО');
     expect(N.logLabel('💬 tuzating', 'ru')).toBe('💬 tuzating');
     expect(N.createdText({ id: 5, title: 'A', direction: 'Banklar', style: '' }, 'style', 'ru')).toContain('Направление: Банки');
-    expect(N.choiceKeyboard('s', 5, N.DEFAULT_STYLES, 'ru').inline_keyboard[0][0].text).toBe('Мультик');
+    expect(N.choiceKeyboard('s', 5, N.DEFAULT_STYLES, 'ru').inline_keyboard[0][0].text).toBe('Моушн');
   });
 
   test('bot: bajarilmagan vazifalar ro‘yxati va tugmalar', () => {

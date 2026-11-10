@@ -32,7 +32,7 @@ export function Sheet({ open, onClose, title, header, children }: { open: boolea
     <D.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <D.Portal>
         <D.Overlay className={overlay} />
-        <D.Content aria-describedby={undefined} className="dlg-sheet fixed top-0 right-0 bottom-0 z-50 w-[min(720px,100vw)] overflow-y-auto border-l border-line bg-surface shadow-pop sm:top-3 sm:right-3 sm:bottom-3 sm:rounded-[24px] sm:border">
+        <D.Content aria-describedby={undefined} onOpenAutoFocus={(e) => e.preventDefault()} className="dlg-sheet fixed top-0 right-0 bottom-0 z-50 w-[min(720px,100vw)] overflow-y-auto border-l border-line bg-surface shadow-pop sm:top-3 sm:right-3 sm:bottom-3 sm:rounded-[24px] sm:border">
           <D.Title className="sr-only">{title}</D.Title>
           <div className="sticky top-0 z-10 grid gap-2.5 border-b border-line bg-surface px-4 pt-[18px] pb-3.5 sm:px-[22px]">{header}</div>
           <div className="px-4 pt-1.5 pb-10 sm:px-[22px]">{children}</div>

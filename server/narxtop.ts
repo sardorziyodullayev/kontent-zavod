@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, label, som, normalizeDirection, normalizeStyle, statusName, statusRu, summarize, titleFrom, tr, type Lang, type NarxtopData, type Order, type OrderStatus } from '../src/core/narxtop';
+import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, label, som, normalizeDirection, normalizeStyle, statusLabel, statusName, summarize, titleFrom, tr, type Lang, type NarxtopData, type Order, type OrderStatus } from '../src/core/narxtop';
 import { adminOnly, botUsername, tgNotify, type AuthUser, type Env } from './auth';
 import { db } from './db';
 import { orders, payments, periods, users, type OrderFile } from './schema';
@@ -134,63 +134,117 @@ const money = (v: unknown) => {
   return n;
 };
 
-// ---------- Excel hisobot (ruscha: boshliqlar shu tilda ko'radi) ----------
+// ---------- Excel hisobot: ish beruvchining Google jadvali ko'rinishida (rangli yo'nalishlar, o'ngda yig'ma), tanlangan tilda ----------
 const fmtD = (t: number | null) => (t ? new Date(t + 5 * 3600_000).toISOString().slice(0, 10).split('-').reverse().join('.') : '');
 
-export async function buildReport(periodId: number | 'all'): Promise<{ buf: Buffer; name: string }> {
+/** Yo'nalish ranglari — asl jadvaldagidek (fon, matn). */
+const DIR_COLOR: Record<string, [string, string?]> = {
+  Internet: ['CFE2F3'], NARXTOP: ['B4A7D6'], Serial: ['FF9900'], Novostroyka: ['F4CCCC'], Avtosalonlar: ['D9EAD3'],
+  MFO: ['FFF2CC'], Banklar: ['FFFF00'], Reklama: ['7F6000', 'FFFFFF'], Hamkorlar: ['EA9999'], 'O‘quv video': ['B7B7B7'], Alohida: ['D9D9D9'],
+};
+const STATUS_COLOR: Record<OrderStatus, string> = { new: '9E9E9E', work: 'E69138', review: '3D85C6', fix: 'CC0000', done: '11734B' };
+const HEAD = '76A5AF', HEAD2 = '45B4C6', NUM = 'D9D2E9';
+
+export async function buildReport(periodId: number | 'all', lang: Lang = 'ru'): Promise<{ buf: Buffer; name: string }> {
   const d = await loadAll();
   const ps = periodId === 'all' ? d.periods : d.periods.filter((p) => p.id === periodId);
   if (!ps.length) throw new HTTPException(404, { message: 'Oy topilmadi' });
+  const T = (uz: string, ru: string) => tr(lang, uz, ru);
+  const pname = (n: string) => (lang === 'ru' ? n.replace(/^(\d+)-oy$/, '$1 месяц') : n);
+  const cur = T('so‘m', 'сум');
   const wb = new ExcelJS.Workbook();
   wb.creator = 'PixelMind';
-  const head = (ws: ExcelJS.Worksheet, row: number) => {
-    const r = ws.getRow(row);
-    r.font = { bold: true, color: { argb: 'FF141A00' } };
-    r.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4FF3A' } }; c.border = { bottom: { style: 'thin' } }; });
+  const thin = { style: 'thin' as const, color: { argb: 'FF8C8C8C' } };
+  const box = { top: thin, left: thin, bottom: thin, right: thin };
+  const paint = (c: ExcelJS.Cell, bg: string, fg = '000000', bold = false) => {
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bg } };
+    c.font = { name: 'Arial', size: 10, bold, color: { argb: 'FF' + fg } };
+    c.border = box;
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   };
-  const title = (ws: ExcelJS.Worksheet, text: string) => { ws.addRow([text]).font = { bold: true, size: 14 }; };
 
-  const sum = wb.addWorksheet('Отчёт');
-  sum.columns = [{ width: 30 }, { width: 14 }, { width: 14 }, { width: 14 }];
-  title(sum, 'AI видео для NARXTOP — отчёт');
-  sum.addRow([`Сформирован: ${fmtD(Date.now())}`]).font = { color: { argb: 'FF7A7973' } };
+  // 1-varaq: asl jadvalga o'xshash — har oy alohida blok, o'ngda yig'ma
+  const ws = wb.addWorksheet(T('Umumiy', 'Общее'), { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 7 }, { width: 38 }, { width: 20 }, { width: 18 }, { width: 15 }, { width: 3 }, { width: 22 }, { width: 18 }];
+  let row = 1;
   for (const p of ps) {
     const os = d.orders.filter((o) => o.periodId === p.id), pays = d.payments.filter((x) => x.periodId === p.id);
     const s = summarize(os, p, pays);
-    sum.addRow([]);
-    sum.addRow([p.name + (p.closedAt ? ` — завершён ${fmtD(p.closedAt)}` : ' — текущий')]).font = { bold: true, size: 13 };
-    sum.addRow(['Всего видео', s.total]); sum.addRow(['Готово', s.done]); sum.addRow(['В работе', s.open]);
-    sum.addRow([]);
-    head(sum, sum.addRow(['Направление', 'Всего', 'Готово', 'Осталось']).number);
-    const ru = (n: string) => label(n, 'ru');
-    for (const g of s.byDirection) sum.addRow([ru(g.name), g.total, g.done, g.total - g.done]);
-    sum.addRow([]);
-    head(sum, sum.addRow(['Стилистика', 'Всего', 'Готово']).number);
-    for (const g of s.byStyle) sum.addRow([ru(g.name), g.total, g.done]);
-    sum.addRow([]);
-    head(sum, sum.addRow(['Оплата', 'Сумма (сум)']).number);
-    sum.addRow(['Сумма за период', s.price]); sum.addRow(['Оплачено', s.paid]); sum.addRow(['Остаток', s.left]).font = { bold: true };
+    const top = row;
+    // sarlavha
+    ws.mergeCells(row, 1, row, 5);
+    paint(ws.getCell(row, 1), HEAD, 'FFFFFF', true);
+    ws.getCell(row, 1).value = pname(p.name) + (p.closedAt ? T(' — yakunlangan', ' — завершён') : T(' — joriy', ' — текущий'));
+    ws.getRow(row).height = 22;
+    row++;
+    const heads = [T('№', 'Кол-во'), T('Nomi', 'Название'), T('Yo‘nalish', 'Направление'), T('Uslub', 'Стилистика'), T('Holat', 'Статус')];
+    heads.forEach((h, i) => { const c = ws.getCell(row, i + 1); paint(c, HEAD, '000000', true); c.value = h; });
+    ws.getRow(row).height = 30;
+    row++;
+    os.forEach((o, i) => {
+      const [bg, fg] = DIR_COLOR[o.direction] ?? ['FFFFFF'];
+      const r = ws.getRow(row);
+      const vals = [i + 1, o.title, label(o.direction, lang), label(o.style, lang), statusLabel(o.status, lang)];
+      vals.forEach((v, j) => { const c = r.getCell(j + 1); paint(c, j === 0 ? NUM : bg, j === 0 ? '000000' : fg ?? '000000'); c.value = v; });
+      // holat — asl jadvaldagi yashil "Готово" belgisi kabi
+      paint(r.getCell(5), STATUS_COLOR[o.status], 'FFFFFF', true);
+      r.height = o.title.length > 38 ? 30 : 18;
+      row++;
+    });
+    if (!os.length) { ws.mergeCells(row, 1, row, 5); ws.getCell(row, 1).value = T('Vazifa yo‘q', 'Задач нет'); row++; }
+
+    // o'ngda yig'ma: yo'nalishlar soni, tayyor, to'lov
+    let sr = top;
+    ws.mergeCells(sr, 7, sr, 8);
+    paint(ws.getCell(sr, 7), HEAD2, '000000', true);
+    ws.getCell(sr, 7).value = pname(p.name);
+    sr++;
+    for (const g of s.byDirection) {
+      const [bg, fg] = DIR_COLOR[g.name] ?? ['FFFFFF'];
+      paint(ws.getCell(sr, 7), bg, fg); ws.getCell(sr, 7).value = label(g.name, lang);
+      paint(ws.getCell(sr, 8), bg, fg); ws.getCell(sr, 8).value = g.total;
+      sr++;
+    }
+    for (const g of s.byStyle) {
+      paint(ws.getCell(sr, 7), 'EFEFEF'); ws.getCell(sr, 7).value = label(g.name, lang);
+      paint(ws.getCell(sr, 8), 'EFEFEF'); ws.getCell(sr, 8).value = g.total;
+      sr++;
+    }
+    paint(ws.getCell(sr, 7), '6AA84F', 'FFFFFF', true); ws.getCell(sr, 7).value = T('Tayyor', 'Готово');
+    paint(ws.getCell(sr, 8), '6AA84F', 'FFFFFF', true); ws.getCell(sr, 8).value = T(`${s.total} tadan ${s.done} ta`, `${s.done} видео из ${s.total}`);
+    sr += 2;
+    const money = (n: number) => `${som(n)} ${cur}`;
+    const payRows: [string, string, string?][] = [
+      [T('Oy summasi', 'Сумма за месяц'), s.price ? money(s.price) : '—'],
+      [T('To‘langan', 'Оплачено'), money(s.paid), '6AA84F'],
+      [T('Qoldiq', 'Остаток'), s.price ? money(s.left) : '—', s.left > 0 ? 'CC0000' : '6AA84F'],
+    ];
+    paint(ws.getCell(sr, 7), HEAD2, '000000', true); ws.mergeCells(sr, 7, sr, 8); ws.getCell(sr, 7).value = T('To‘lov', 'Оплата'); sr++;
+    for (const [k, v, color] of payRows) {
+      paint(ws.getCell(sr, 7), 'FFFFFF'); ws.getCell(sr, 7).value = k;
+      paint(ws.getCell(sr, 8), color ?? 'FFFFFF', color ? 'FFFFFF' : '000000', true); ws.getCell(sr, 8).value = v;
+      sr++;
+    }
+    row = Math.max(row, sr) + 2;
   }
-  sum.getColumn(2).numFmt = '#,##0';
 
-  const vs = wb.addWorksheet('Видео');
-  vs.columns = [{ header: '№', width: 6 }, ...(ps.length > 1 ? [{ header: 'Период', width: 12 }] : []), { header: 'Название', width: 42 }, { header: 'Направление', width: 18 }, { header: 'Стилистика', width: 14 }, { header: 'Статус', width: 14 }, { header: 'Дата задачи', width: 13 }, { header: 'Дата готовности', width: 15 }, { header: 'Ссылка на видео', width: 36 }, { header: 'Примечание', width: 30 }];
-  head(vs, 1);
-  for (const p of ps) d.orders.filter((o) => o.periodId === p.id).forEach((o, i) => {
-    const r = vs.addRow([i + 1, ...(ps.length > 1 ? [p.name] : []), o.title, label(o.direction, 'ru'), label(o.style, 'ru'), statusRu(o.status), o.source === 'import' ? '' : fmtD(o.createdAt), o.source === 'import' ? '' : fmtD(o.doneAt), o.videoUrl, o.note]);
-    if (o.status === 'done') r.getCell(ps.length > 1 ? 6 : 5).font = { color: { argb: 'FF006300' }, bold: true };
-  });
-  vs.views = [{ state: 'frozen', ySplit: 1 }];
-
-  const pay = wb.addWorksheet('Оплата');
-  pay.columns = [{ header: 'Период', width: 14 }, { header: 'Дата', width: 12 }, { header: 'Сумма (сум)', width: 16 }, { header: 'Примечание', width: 34 }, { header: 'Кто записал', width: 18 }, { header: 'Подтверждено', width: 14 }];
-  head(pay, 1);
-  for (const p of ps) for (const x of d.payments.filter((y) => y.periodId === p.id)) pay.addRow([p.name, fmtD(x.paidAt), x.amount, x.note, x.createdBy, x.confirmedAt ? 'да' : 'ожидает']);
-  pay.getColumn(3).numFmt = '#,##0';
+  // 2-varaq: to'lovlar ro'yxati
+  const pay = wb.addWorksheet(T('To‘lovlar', 'Оплата'), { views: [{ showGridLines: false, state: 'frozen', ySplit: 1 }] });
+  pay.columns = [{ width: 14 }, { width: 12 }, { width: 16 }, { width: 34 }, { width: 18 }, { width: 16 }];
+  [T('Oy', 'Месяц'), T('Sana', 'Дата'), T('Summa', 'Сумма') + ` (${cur})`, T('Izoh', 'Комментарий'), T('Kim yozdi', 'Кто записал'), T('Tasdiq', 'Подтверждено')]
+    .forEach((h, i) => { const c = pay.getCell(1, i + 1); paint(c, HEAD, '000000', true); c.value = h; });
+  let pr = 2;
+  for (const p of ps) for (const x of d.payments.filter((y) => y.periodId === p.id)) {
+    const vals = [pname(p.name), fmtD(x.paidAt) || '—', x.amount, x.note, x.createdBy, x.confirmedAt ? T('ha', 'да') : T('kutilmoqda', 'ожидает')];
+    vals.forEach((v, j) => { const c = pay.getCell(pr, j + 1); paint(c, 'FFFFFF'); c.value = v; });
+    pay.getCell(pr, 3).numFmt = '#,##0';
+    paint(pay.getCell(pr, 6), x.confirmedAt ? 'D9EAD3' : 'FFF2CC');
+    pr++;
+  }
 
   const buf = Buffer.from(await wb.xlsx.writeBuffer());
-  const slug = periodId === 'all' ? 'hammasi' : ps[0].name.replace(/[^\p{L}\p{N}-]+/gu, '_');
-  return { buf, name: `narxtop-hisobot-${slug}-${fmtD(Date.now()).split('.').reverse().join('-')}.xlsx` };
+  const slug = periodId === 'all' ? T('hammasi', 'vse') : ps[0].name.replace(/[^\p{L}\p{N}-]+/gu, '_');
+  return { buf, name: `narxtop-${T('hisobot', 'otchet')}-${slug}-${fmtD(Date.now()).split('.').reverse().join('-')}.xlsx` };
 }
 
 export const narxtop = new Hono<Env>()
@@ -245,7 +299,8 @@ export const narxtop = new Hono<Env>()
   })
   .get('/report.xlsx', async (c) => {
     const q = c.req.query('period');
-    const { buf, name } = await buildReport(q === 'all' ? 'all' : Number(q) || (await currentPeriodId()));
+    const lang: Lang = c.req.query('lang') === 'uz' ? 'uz' : c.req.query('lang') === 'ru' ? 'ru' : c.get('user').lang;
+    const { buf, name } = await buildReport(q === 'all' ? 'all' : Number(q) || (await currentPeriodId()), lang);
     return c.body(new Uint8Array(buf), 200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}` });
   })
   // ---------- bot uchun (worker ADMIN_TOKEN bilan, Telegram foydalanuvchisi nomidan) ----------
