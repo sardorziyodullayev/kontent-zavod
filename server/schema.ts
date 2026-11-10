@@ -131,4 +131,8 @@ export const payments = sqliteTable('payments', {
   amount: integer('amount').notNull(),
   paidAt: integer('paid_at').notNull(),
   note: text('note').notNull().default(''),
+  /** kim yozdi (ism) */
+  createdBy: text('created_by').notNull().default(''),
+  /** Sardor pulni olganini tasdiqlagan vaqt; null — tasdiq kutilmoqda */
+  confirmedAt: integer('confirmed_at'),
 });

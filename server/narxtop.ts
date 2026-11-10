@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, label, normalizeDirection, normalizeStyle, statusName, statusRu, summarize, titleFrom, tr, type Lang, type NarxtopData, type Order, type OrderStatus } from '../src/core/narxtop';
+import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, label, som, normalizeDirection, normalizeStyle, statusName, statusRu, summarize, titleFrom, tr, type Lang, type NarxtopData, type Order, type OrderStatus } from '../src/core/narxtop';
 import { adminOnly, botUsername, tgNotify, type AuthUser, type Env } from './auth';
 import { db } from './db';
 import { orders, payments, periods, users, type OrderFile } from './schema';
@@ -33,12 +33,37 @@ async function currentPeriodId(): Promise<number> {
 }
 
 /** Kimga xabar: mijoz harakat qilsa — adminlarga, admin harakat qilsa — mijozlarga. */
-async function notifyOther(actor: AuthUser, text: (lang: Lang) => string) {
+async function notifyOther(actor: AuthUser, text: (lang: Lang) => string, extra?: (lang: Lang) => object) {
   const all = await db.select().from(users);
   const targets = actor.role === 'client'
     ? [...all.filter((u) => u.role === 'admin').map((u) => ({ chatId: u.tgId, lang: u.lang })), { chatId: process.env.TELEGRAM_OWNER_ID, lang: 'uz' as Lang }]
     : all.filter((u) => u.role === 'client').map((u) => ({ chatId: u.tgId, lang: u.lang }));
-  await tgNotify(targets.filter((t) => t.chatId && t.chatId !== actor.tgId), text);
+  await tgNotify(targets.filter((t) => t.chatId && t.chatId !== actor.tgId), text, extra);
+}
+
+/** To'lov: ish beruvchi yozsa — Sardorga "✅ Oldim" tugmasi bilan xabar; Sardor yozsa — darhol tasdiqlangan. */
+export async function createPayment(actor: AuthUser, b: { periodId?: number; amount?: unknown; paidAt?: number | null; note?: string }) {
+  const amount = money(b.amount);
+  if (!amount) throw new HTTPException(400, { message: 'Summani yozing' });
+  const now = Date.now();
+  const periodId = Number(b.periodId) || (await currentPeriodId());
+  const [p] = await db.insert(payments).values({ periodId, amount, paidAt: b.paidAt === 0 ? 0 : Number(b.paidAt) || now, note: String(b.note ?? '').trim().slice(0, 200), createdBy: actor.name, confirmedAt: actor.role === 'admin' ? now : null }).returning();
+  const [per] = await db.select().from(periods).where(eq(periods.id, periodId));
+  const paid = (await db.select().from(payments).where(eq(payments.periodId, periodId))).reduce((s, x) => s + x.amount, 0);
+  const left = per?.price ? Math.max(0, per.price - paid) : null;
+  await notifyOther(actor, (l) => [`💰 <b>${tr(l, 'To‘lov yozildi', 'Записана оплата')}: ${som(amount)} ${tr(l, 'so‘m', 'сум')}</b>`, `${esc(per?.name ?? '')} · 👤 ${esc(actor.name)}${p.note ? ' · ' + esc(p.note) : ''}`,
+    left !== null ? `${tr(l, 'Qoldiq', 'Остаток')}: ${som(left)} ${tr(l, 'so‘m', 'сум')}` : '', actor.role === 'client' ? tr(l, '\nPulni olgan bo‘lsangiz, tasdiqlang:', '') : ''].filter(Boolean).join('\n'),
+  actor.role === 'client' ? (l) => ({ reply_markup: { inline_keyboard: [[{ text: tr(l, '✅ Oldim', '✅ Получил'), callback_data: `nx:pc:${p.id}` }]] } }) : undefined);
+  return p;
+}
+
+export async function confirmPayment(actor: AuthUser, id: number) {
+  const [p] = await db.select().from(payments).where(eq(payments.id, id));
+  if (!p) throw new HTTPException(404, { message: 'To‘lov topilmadi' });
+  if (p.confirmedAt) return p;
+  const [n] = await db.update(payments).set({ confirmedAt: Date.now() }).where(eq(payments.id, id)).returning();
+  await notifyOther(actor, (l) => `✅ <b>${tr(l, 'To‘lov tasdiqlandi', 'Оплата подтверждена')}:</b> ${som(p.amount)} ${tr(l, 'so‘m', 'сум')} · ${esc(actor.name)}`);
+  return n;
 }
 const link = (o: { id: number }) => (PANEL() ? `\n${PANEL()}/#/narxtop?v=${o.id}` : '');
 
@@ -158,9 +183,9 @@ export async function buildReport(periodId: number | 'all'): Promise<{ buf: Buff
   vs.views = [{ state: 'frozen', ySplit: 1 }];
 
   const pay = wb.addWorksheet('Оплата');
-  pay.columns = [{ header: 'Период', width: 14 }, { header: 'Дата', width: 12 }, { header: 'Сумма (сум)', width: 16 }, { header: 'Примечание', width: 40 }];
+  pay.columns = [{ header: 'Период', width: 14 }, { header: 'Дата', width: 12 }, { header: 'Сумма (сум)', width: 16 }, { header: 'Примечание', width: 34 }, { header: 'Кто записал', width: 18 }, { header: 'Подтверждено', width: 14 }];
   head(pay, 1);
-  for (const p of ps) for (const x of d.payments.filter((y) => y.periodId === p.id)) pay.addRow([p.name, fmtD(x.paidAt), x.amount, x.note]);
+  for (const p of ps) for (const x of d.payments.filter((y) => y.periodId === p.id)) pay.addRow([p.name, fmtD(x.paidAt), x.amount, x.note, x.createdBy, x.confirmedAt ? 'да' : 'ожидает']);
   pay.getColumn(3).numFmt = '#,##0';
 
   const buf = Buffer.from(await wb.xlsx.writeBuffer());
@@ -207,14 +232,17 @@ export const narxtop = new Hono<Env>()
     return c.json({ ok: true });
   })
   .delete('/periods/:id', adminOnly, async (c) => { await db.delete(periods).where(eq(periods.id, Number(c.req.param('id')))); return c.json({ ok: true }); })
-  .post('/payments', async (c) => {
-    const b = await c.req.json<{ periodId?: number; amount?: unknown; paidAt?: number; note?: string }>();
-    const amount = money(b.amount);
-    if (!amount) throw new HTTPException(400, { message: 'Summani yozing' });
-    const [p] = await db.insert(payments).values({ periodId: Number(b.periodId) || (await currentPeriodId()), amount, paidAt: b.paidAt === 0 ? 0 : Number(b.paidAt) || Date.now(), note: String(b.note ?? '').trim() }).returning();
-    return c.json(p, 201);
+  .post('/payments', async (c) => c.json(await createPayment(c.get('user'), await c.req.json()), 201))
+  .post('/payments/:id/confirm', adminOnly, async (c) => c.json(await confirmPayment(c.get('user'), Number(c.req.param('id')))))
+  // mijoz faqat o'zi yozgan va hali tasdiqlanmagan to'lovni o'chira oladi
+  .delete('/payments/:id', async (c) => {
+    const u = c.get('user');
+    const [p] = await db.select().from(payments).where(eq(payments.id, Number(c.req.param('id'))));
+    if (!p) return c.json({ ok: true });
+    if (u.role !== 'admin' && p.confirmedAt) throw new HTTPException(403, { message: 'Tasdiqlangan to‘lovni faqat Sardor o‘chira oladi' });
+    await db.delete(payments).where(eq(payments.id, p.id));
+    return c.json({ ok: true });
   })
-  .delete('/payments/:id', async (c) => { await db.delete(payments).where(eq(payments.id, Number(c.req.param('id')))); return c.json({ ok: true }); })
   .get('/report.xlsx', async (c) => {
     const q = c.req.query('period');
     const { buf, name } = await buildReport(q === 'all' ? 'all' : Number(q) || (await currentPeriodId()));
@@ -228,6 +256,22 @@ export const narxtop = new Hono<Env>()
     if (!u && !owner) throw new HTTPException(403, { message: 'Telegram ulanmagan' });
     const actor: AuthUser = u ? { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, via: 'session' } : c.get('user');
     return c.json(await createOrder(actor, { text: b.text, title: b.title }, 'telegram', b.files ?? []), 201);
+  })
+  .post('/tg/payment', adminOnly, async (c) => {
+    const b = await c.req.json<{ tgId: string; amount: number; note?: string }>();
+    const [u] = await db.select().from(users).where(eq(users.tgId, String(b.tgId)));
+    const owner = String(b.tgId) === process.env.TELEGRAM_OWNER_ID;
+    if (!u && !owner) throw new HTTPException(403, { message: 'Telegram ulanmagan' });
+    const actor: AuthUser = u ? { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, via: 'session' } : c.get('user');
+    return c.json(await createPayment(actor, { amount: b.amount, note: b.note }), 201);
+  })
+  .post('/tg/payment/:id/confirm', adminOnly, async (c) => {
+    const b = await c.req.json<{ tgId: string }>();
+    const [u] = await db.select().from(users).where(eq(users.tgId, String(b.tgId)));
+    if (u && u.role !== 'admin') throw new HTTPException(403, { message: 'Faqat Sardor tasdiqlaydi' });
+    if (!u && String(b.tgId) !== process.env.TELEGRAM_OWNER_ID) throw new HTTPException(403, { message: 'Telegram ulanmagan' });
+    const actor: AuthUser = u ? { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, via: 'session' } : c.get('user');
+    return c.json(await confirmPayment(actor, Number(c.req.param('id'))));
   })
   .post('/tg/order/:id', adminOnly, async (c) => {
     const b = await c.req.json<{ tgId: string; direction?: string; style?: string; status?: OrderStatus }>();

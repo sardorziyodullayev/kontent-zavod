@@ -136,8 +136,10 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
         <Stat label={L('Tayyor', 'Готово')} value={s.done} sub={s.total ? `${Math.round((s.done / s.total) * 100)}%` : '—'}><Meter value={s.total ? s.done / s.total : 0} className="mt-2" /></Stat>
         <Stat label={L('Ishda', 'В работе')} value={s.open} warn={s.byStatus.fix > 0}
           sub={s.byStatus.fix ? L(`${s.byStatus.fix} ta tuzatishda`, `на правках: ${s.byStatus.fix}`) : s.byStatus.new ? L(`${s.byStatus.new} ta yangi`, `новых: ${s.byStatus.new}`) : L('hammasi joyida', 'всё в порядке')} />
-        <Stat label={L('To‘lov qoldig‘i', 'Остаток оплаты')} value={s.price ? som(s.left) : '—'} sub={s.price ? `${som(s.paid)} / ${som(s.price)} ${cur()}` : L('oy summasi kiritilmagan', 'сумма месяца не указана')} />
+        <Stat label={L('To‘lov qoldig‘i', 'Остаток оплаты')} value={s.price ? som(s.left) : '—'} sub={s.price ? `${som(s.paid)} / ${som(s.price)} ${cur()}` : L('oy summasi kiritilmagan', 'сумма месяца не указана')} warn={s.left > 0} />
       </div>
+
+      <Payments period={period} pays={pays} price={s.price} paid={s.paid} left={s.left} pending={s.pending} me={me} />
 
       {!me.tgLinked && me.via === 'session' && (
         <Card className="flex flex-wrap items-center gap-3 border-dashed">
@@ -209,7 +211,6 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
               </table>
             )}
           </Card>
-          <Payments period={period} pays={pays} price={s.price} paid={s.paid} left={s.left} />
         </div>
       </div>
     </>
@@ -275,53 +276,97 @@ function Stat({ label: title, value, sub, warn, children }: { label: string; val
   );
 }
 
-function Payments({ period, pays, price, paid, left }: { period: Period; pays: NarxtopData['payments']; price: number; paid: number; left: number }) {
+/** To'lovlar: ish beruvchi uchun eng muhim joy — oy summasi, to'langan, qoldiq va har bir to'lov (kim yozdi, tasdiqlandimi). */
+function Payments({ period, pays, price, paid, left, pending, me }: { period: Period; pays: NarxtopData['payments']; price: number; paid: number; left: number; pending: number; me: MeInfo }) {
   const mut = useNarxtopMutation();
   const [adding, setAdding] = useState(false);
   const [editPrice, setEditPrice] = useState(false);
+  const [amount, setAmount] = useState('');
+  const admin = me.role === 'admin';
+  const pct = price ? Math.min(1, paid / price) : 0;
+  const fmtInput = (v: string) => { const d = v.replace(/\D/g, ''); return d ? som(Number(d)) : ''; };
   return (
     <Card>
-      <CardHead title={L('To‘lovlar', 'Оплаты')} right={<Button size="sm" onClick={() => setAdding(true)}><Plus size={14} />{L('To‘lov', 'Оплата')}</Button>} />
-      <div className="grid gap-1 text-[13.5px]">
-        <Row k={L('Oy summasi', 'Сумма за месяц')} v={editPrice ? (
-          <form className="flex gap-1" onSubmit={(e) => { e.preventDefault(); mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { price: new FormData(e.currentTarget).get('price') } }); setEditPrice(false); }}>
-            <input name="price" className="input h-8 w-32 text-right" inputMode="numeric" defaultValue={price || ''} autoFocus />
-            <Button size="icon-sm" type="submit" variant="primary" aria-label={L('Saqlash', 'Сохранить')}><Check size={14} /></Button>
-          </form>
-        ) : <button className="underline decoration-dotted underline-offset-4 hover:text-ink" onClick={() => setEditPrice(true)}>{price ? `${som(price)} ${cur()}` : L('kiritish', 'указать')}</button>} />
-        <Row k={L('To‘langan', 'Оплачено')} v={`${som(paid)} ${cur()}`} />
-        <Row k={L('Qoldiq', 'Остаток')} v={<b className={left ? 'text-critical-text' : 'text-good-text'}>{som(left)} {cur()}</b>} />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Wallet size={19} className="text-accent-text" />
+        <h2 className="card-title">{L('To‘lovlar', 'Оплаты')} · {periodName(period.name)}</h2>
+        <Button variant="primary" className="ml-auto" onClick={() => { setAmount(''); mut.reset(); setAdding(true); }}><Plus size={16} />{L('To‘lov qo‘shish', 'Добавить оплату')}</Button>
       </div>
-      {pays.length > 0 && (
-        <ul className="mt-3 grid gap-1 border-t border-line pt-2.5">
-          {pays.map((p) => (
-            <li key={p.id} className="group flex items-center gap-2 text-[13px]">
-              <Wallet size={14} className="shrink-0 text-muted" />
-              <span className="text-muted tnum">{dmy(p.paidAt)}</span>
-              <b className="tnum">{som(p.amount)}</b>
-              <span className="min-w-0 flex-1 truncate text-muted" title={p.note}>{p.note}</span>
-              <button className="text-muted opacity-0 group-hover:opacity-100 hover:text-critical-text focus:opacity-100" aria-label={L('To‘lovni o‘chirish', 'Удалить оплату')} onClick={() => confirm(L(`${som(p.amount)} so‘mlik to‘lov o‘chirilsinmi?`, `Удалить оплату ${som(p.amount)} сум?`)) && mut.mutate({ path: `/payments/${p.id}`, method: 'DELETE' })}><Trash2 size={14} /></button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-[16px] bg-surface-2 px-4 py-3">
+          <div className="text-[12.5px] text-muted">{L('Oy uchun kelishilgan summa', 'Сумма за месяц')}</div>
+          {editPrice ? (
+            <form className="mt-1 flex gap-1" onSubmit={(e) => { e.preventDefault(); mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { price: new FormData(e.currentTarget).get('price') } }); setEditPrice(false); }}>
+              <input name="price" className="input h-9 min-w-0 flex-1 text-right" inputMode="numeric" defaultValue={price || ''} autoFocus />
+              <Button size="icon" type="submit" variant="primary" aria-label={L('Saqlash', 'Сохранить')}><Check size={15} /></Button>
+            </form>
+          ) : (
+            <button className="mt-0.5 font-display text-[22px] font-semibold tnum underline decoration-dotted decoration-1 underline-offset-[6px] hover:text-accent-text" title={L('O‘zgartirish', 'Изменить')} onClick={() => setEditPrice(true)}>
+              {price ? `${som(price)}` : L('kiritish', 'указать')}
+            </button>
+          )}
+        </div>
+        <div className="rounded-[16px] bg-surface-2 px-4 py-3">
+          <div className="text-[12.5px] text-muted">{L('To‘langan', 'Оплачено')}</div>
+          <div className="mt-0.5 font-display text-[22px] font-semibold text-good-text tnum">{som(paid)}</div>
+          {pending > 0 && <div className="text-[12px] text-muted">⏳ {L(`${som(pending)} tasdiq kutmoqda`, `${som(pending)} ждёт подтверждения`)}</div>}
+        </div>
+        <div className="rounded-[16px] bg-surface-2 px-4 py-3">
+          <div className="text-[12.5px] text-muted">{L('Qoldiq', 'Осталось оплатить')}</div>
+          <div className={cn('mt-0.5 font-display text-[22px] font-semibold tnum', left ? 'text-critical-text' : 'text-good-text')}>{price ? som(left) : '—'}</div>
+          {price > 0 && !left && <div className="text-[12px] text-good-text">{L('to‘liq to‘langan ✓', 'оплачено полностью ✓')}</div>}
+        </div>
+      </div>
+      {price > 0 && <Meter value={pct} className="mt-3" />}
+
+      <div className="mt-4">
+        {!pays.length ? <p className="text-[13px] text-muted">{L('Bu oyda hali to‘lov yozilmagan.', 'В этом месяце оплат пока нет.')}</p> : (
+          <ul className="grid gap-1.5">
+            {pays.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[14px] border border-line px-3 py-2 text-[13.5px]">
+                <span className="w-[78px] text-muted tnum">{dmy(p.paidAt)}</span>
+                <b className="tnum">{som(p.amount)} {cur()}</b>
+                <span className="min-w-0 flex-1 truncate text-muted" title={p.note}>{p.note}{p.createdBy ? ` · ${p.createdBy}` : ''}</span>
+                {p.confirmedAt
+                  ? <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-good-text"><Check size={13} strokeWidth={2.6} />{L('tasdiqlangan', 'подтверждено')}</span>
+                  : admin
+                    ? <Button size="sm" variant="primary" onClick={() => mut.mutate({ path: `/payments/${p.id}/confirm`, body: {} })}><Check size={13} />{L('Oldim', 'Получил')}</Button>
+                    : <span className="text-[12px] text-muted">⏳ {L('Sardor tasdiqlashi kutilmoqda', 'ждёт подтверждения Сардора')}</span>}
+                {(admin || !p.confirmedAt) && (
+                  <button className="text-muted hover:text-critical-text" aria-label={L('To‘lovni o‘chirish', 'Удалить оплату')}
+                    onClick={() => confirm(L(`${som(p.amount)} so‘mlik to‘lov o‘chirilsinmi?`, `Удалить оплату ${som(p.amount)} сум?`)) && mut.mutate({ path: `/payments/${p.id}`, method: 'DELETE' })}><Trash2 size={14} /></button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <Modal open={adding} onClose={() => setAdding(false)} title={`${L('To‘lov qo‘shish', 'Добавить оплату')} · ${periodName(period.name)}`}>
         <form className="grid gap-3.5" onSubmit={(e) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
-          mut.mutate({ path: '/payments', body: { periodId: period.id, amount: fd.get('amount'), paidAt: fromYmd(String(fd.get('date'))), note: fd.get('note') } }, { onSuccess: () => setAdding(false) });
+          mut.mutate({ path: '/payments', body: { periodId: period.id, amount: amount.replace(/\D/g, ''), paidAt: fromYmd(String(fd.get('date'))), note: fd.get('note') } }, { onSuccess: () => setAdding(false) });
         }}>
-          <Field label={L('Summa (so‘m)', 'Сумма (сум)')}><input name="amount" className="input h-11 text-[15px]" inputMode="numeric" placeholder="1 000 000" required autoFocus /></Field>
+          {!admin && <p className="rounded-xl bg-accent-wash px-3 py-2 text-[13px] text-accent-text">{L('Bergan summangizni yozing. Sardor pulni olganini tasdiqlaydi — sizga Telegram’da xabar keladi.', 'Укажите сумму, которую вы передали. Сардор подтвердит получение — вам придёт сообщение в Telegram.')}</p>}
+          <Field label={L('Summa (so‘m)', 'Сумма (сум)')}>
+            <input className="input h-12 text-[17px] font-semibold tnum" inputMode="numeric" placeholder="1 000 000" required autoFocus value={amount} onChange={(e) => setAmount(fmtInput(e.target.value))} />
+          </Field>
+          {left > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className="rounded-full border border-line px-3 py-1.5 text-[13px] hover:bg-surface-2" onClick={() => setAmount(som(left))}>{L('Butun qoldiq', 'Весь остаток')}: {som(left)}</button>
+              {left > 1_000_000 && <button type="button" className="rounded-full border border-line px-3 py-1.5 text-[13px] hover:bg-surface-2" onClick={() => setAmount(som(Math.round(left / 2 / 100_000) * 100_000))}>{L('Yarmi', 'Половина')}: {som(Math.round(left / 2 / 100_000) * 100_000)}</button>}
+            </div>
+          )}
           <Field label={L('Sana', 'Дата')}><input name="date" type="date" className="input h-11" defaultValue={ymd(Date.now())} /></Field>
-          <Field label={L('Izoh (ixtiyoriy)', 'Комментарий (необязательно)')}><input name="note" className="input h-11" placeholder={L('masalan: avans', 'например: предоплата')} /></Field>
+          <Field label={L('Izoh (ixtiyoriy)', 'Комментарий (необязательно)')}><input name="note" className="input h-11" placeholder={L('masalan: avans, naqd, kartaga', 'например: аванс, наличными, на карту')} /></Field>
           {mut.error && <p className="text-[13px] text-critical-text">{mut.error.message}</p>}
-          <Button type="submit" variant="primary" className="h-11 justify-center" disabled={mut.isPending}>{L('Saqlash', 'Сохранить')}</Button>
+          <Button type="submit" variant="primary" className="h-12 justify-center text-[15px]" disabled={mut.isPending || !amount}><Check size={16} />{L('Saqlash', 'Сохранить')}</Button>
         </form>
       </Modal>
     </Card>
   );
 }
-const Row = ({ k, v }: { k: string; v: ReactNode }) => <div className="flex items-center justify-between gap-2"><span className="text-muted">{k}</span><span className="tnum">{v}</span></div>;
 
 /** Tanlov: qiymat bazada o'zbekcha nom, ko'rinishi joriy tilda. */
 function Choice({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {

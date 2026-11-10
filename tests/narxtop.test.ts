@@ -36,14 +36,25 @@ describe('narxtop', () => {
       order({ id: 4, status: 'new' }),
     ];
     const s = N.summarize(os, { id: 1, name: '2-oy', price: 5_000_000, createdAt: 0, closedAt: null }, [
-      { id: 1, periodId: 1, amount: 3_000_000, paidAt: 0, note: '' },
-      { id: 2, periodId: 1, amount: 1_300_000, paidAt: 0, note: '' },
+      { id: 1, periodId: 1, amount: 3_000_000, paidAt: 0, note: '', createdBy: '', confirmedAt: 1 },
+      { id: 2, periodId: 1, amount: 1_300_000, paidAt: 0, note: '', createdBy: '', confirmedAt: null },
     ]);
-    expect(s).toMatchObject({ total: 4, done: 1, open: 3, paid: 4_300_000, left: 700_000 });
+    expect(s).toMatchObject({ total: 4, done: 1, open: 3, paid: 4_300_000, left: 700_000, pending: 1_300_000 });
     expect(s.byStatus).toEqual({ new: 1, work: 1, review: 0, fix: 1, done: 1 });
     expect(s.byDirection[0]).toEqual({ name: 'NARXTOP', total: 2, done: 1 });
     expect(s.byDirection.find((g) => g.name === 'Ko‘rsatilmagan')?.total).toBe(1);
     expect(N.som(5_000_000)).toBe('5 000 000');
+  });
+
+  test('to‘lov summasi matndan', () => {
+    expect(N.parseAmount('1 000 000')).toEqual({ amount: 1_000_000, note: '' });
+    expect(N.parseAmount('1.5 mln avans')).toEqual({ amount: 1_500_000, note: 'avans' });
+    expect(N.parseAmount('1,5 млн аванс')).toEqual({ amount: 1_500_000, note: 'аванс' });
+    expect(N.parseAmount('500 ming')).toEqual({ amount: 500_000, note: '' });
+    expect(N.parseAmount('предоплата 300к')).toEqual({ amount: 300_000, note: 'предоплата' });
+    expect(N.parseAmount('1300000')).toEqual({ amount: 1_300_000, note: '' });
+    expect(N.parseAmount('salom')).toBeNull();
+    expect(N.parseAmount('5')).toBeNull();
   });
 
   test('rus tili: nomlar, holatlar, tarix va bot matni', () => {

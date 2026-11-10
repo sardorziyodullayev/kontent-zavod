@@ -5,7 +5,7 @@ export type Role = 'admin' | 'client';
 
 export interface Me { id: number; login: string; name: string; role: Role; tgLinked: boolean; lang: Lang }
 export interface Period { id: number; name: string; price: number; createdAt: number; closedAt: number | null }
-export interface Payment { id: number; periodId: number; amount: number; paidAt: number; note: string }
+export interface Payment { id: number; periodId: number; amount: number; paidAt: number; note: string; createdBy: string; confirmedAt: number | null }
 export interface OrderLog { t: number; who: string; text: string }
 export interface Order {
   id: number; periodId: number; title: string; direction: string; style: string; status: OrderStatus;
@@ -63,6 +63,8 @@ export interface Summary {
   total: number; done: number; open: number; byStatus: Record<OrderStatus, number>;
   byDirection: { name: string; total: number; done: number }[]; byStyle: { name: string; total: number; done: number }[];
   price: number; paid: number; left: number;
+  /** yozilgan, lekin Sardor hali tasdiqlamagan summa (paid ichida) */
+  pending: number;
 }
 
 export function summarize(orders: Order[], period: Period | undefined, payments: Payment[]): Summary {
@@ -81,7 +83,8 @@ export function summarize(orders: Order[], period: Period | undefined, payments:
   };
   const price = period?.price ?? 0;
   const paid = payments.reduce((s, p) => s + p.amount, 0);
-  return { total: orders.length, done: byStatus.done, open: orders.length - byStatus.done, byStatus, byDirection: group((o) => o.direction), byStyle: group((o) => o.style), price, paid, left: Math.max(0, price - paid) };
+  const pending = payments.filter((p) => !p.confirmedAt).reduce((s, p) => s + p.amount, 0);
+  return { pending, total: orders.length, done: byStatus.done, open: orders.length - byStatus.done, byStatus, byDirection: group((o) => o.direction), byStyle: group((o) => o.style), price, paid, left: Math.max(0, price - paid) };
 }
 
 /** 5000000 → "5 000 000" */
@@ -122,8 +125,8 @@ export function logLabel(text: string, lang: Lang): string {
 const escH = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export const nxHelp = (lang: Lang) => lang === 'ru'
-  ? ['🎬 <b>Задачи NARXTOP</b>', '', '• Отправьте сюда сценарий (текст или файл) — в панели появится задача.', '• /vazifalar — невыполненные задачи и их статус', '• /excel — отчёт за текущий месяц (Excel)', '', 'Когда видео готово или его нужно проверить, бот напишет сам.'].join('\n')
-  : ['🎬 <b>Narxtop vazifalari</b>', '', '• Ssenariyni shu yerga yuboring (matn yoki fayl) — panelda vazifa bo‘lib tushadi.', '• /vazifalar — bajarilmagan vazifalar va holati', '• /excel — joriy oy hisoboti (Excel fayl)', '', 'Video tayyor bo‘lsa yoki tekshirish kerak bo‘lsa, bot o‘zi xabar beradi.'].join('\n');
+  ? ['🎬 <b>Задачи NARXTOP</b>', '', '• Отправьте сюда сценарий (текст или файл) — в панели появится задача.', '• /vazifalar — невыполненные задачи и их статус', '• /excel — отчёт за текущий месяц (Excel)', '• /tolov — оплаты: сколько оплачено, остаток и кнопка «Добавить оплату»', '', 'Когда видео готово или его нужно проверить, бот напишет сам.'].join('\n')
+  : ['🎬 <b>Narxtop vazifalari</b>', '', '• Ssenariyni shu yerga yuboring (matn yoki fayl) — panelda vazifa bo‘lib tushadi.', '• /vazifalar — bajarilmagan vazifalar va holati', '• /excel — joriy oy hisoboti (Excel fayl)', '• /tolov — to‘lovlar: to‘langan, qoldiq va “To‘lov qo‘shish” tugmasi', '', 'Video tayyor bo‘lsa yoki tekshirish kerak bo‘lsa, bot o‘zi xabar beradi.'].join('\n');
 
 export const linkedText = (name: string, lang: Lang) => `✅ <b>${tr(lang, 'Ulandi', 'Подключено')}: ${escH(name)}</b>\n\n${nxHelp(lang)}`;
 export const linkFailed = (lang: Lang) => tr(lang, '❌ Havola eskirgan yoki noto‘g‘ri. Paneldagi “Telegram’ni ulash” tugmasini qayta bosing.', '❌ Ссылка устарела или неверна. Нажмите «Подключить Telegram» в панели ещё раз.');
@@ -161,3 +164,39 @@ export function choiceKeyboard(kind: 'd' | 's', orderId: number, options: string
   rows.push([{ text: tr(lang, 'O‘tkazib yuborish', 'Пропустить'), callback_data: `nx:${kind}:${orderId}:-1` }]);
   return { inline_keyboard: rows };
 }
+
+// ---------- to'lovlar ----------
+/** Matndagi summa: "1 000 000", "1.5 mln", "1,5 млн", "500 ming", "500к". Topilmasa null. Qolgan matn — izoh. */
+export function parseAmount(text: string): { amount: number; note: string } | null {
+  const m = /(\d[\d\s.,]*)\s*(mln|million|млн|миллион\w*|ming|тыс\w*|k|к)?/i.exec(text.trim());
+  if (!m) return null;
+  const unit = (m[2] ?? '').toLowerCase();
+  const raw = m[1].trim();
+  let n: number;
+  if (unit) n = Number(raw.replace(/\s/g, '').replace(',', '.')) * (/^(mln|million|млн|миллион)/.test(unit) ? 1e6 : 1e3);
+  else n = Number(raw.replace(/[\s.,]/g, ''));
+  if (!Number.isFinite(n) || n < 1000) return null;
+  const note = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim().replace(/^[-–—:,]\s*/, '');
+  return { amount: Math.round(n), note };
+}
+
+const fmtDay = (t: number) => (t ? new Date(t + 5 * 3600_000).toISOString().slice(0, 10).split('-').reverse().join('.') : '—');
+
+/** Bot: joriy oy to'lovlari — summa, to'langan, qoldiq va ro'yxat. */
+export function payText(d: NarxtopData, lang: Lang = 'uz'): string {
+  const p = [...d.periods].reverse().find((x) => !x.closedAt) ?? d.periods[d.periods.length - 1];
+  if (!p) return tr(lang, 'Hali oy ochilmagan.', 'Месяц ещё не открыт.');
+  const pays = d.payments.filter((x) => x.periodId === p.id);
+  const s = summarize([], p, pays);
+  const cur = tr(lang, 'so‘m', 'сум');
+  const L = [`💰 <b>${escH(p.name)} — ${tr(lang, 'to‘lovlar', 'оплаты')}</b>`, '',
+    `${tr(lang, 'Oy summasi', 'Сумма за месяц')}: <b>${s.price ? som(s.price) + ' ' + cur : tr(lang, 'kiritilmagan', 'не указана')}</b>`,
+    `${tr(lang, 'To‘langan', 'Оплачено')}: <b>${som(s.paid)} ${cur}</b>`,
+    s.price ? `${tr(lang, 'Qoldiq', 'Остаток')}: <b>${som(s.left)} ${cur}</b>` : ''];
+  if (s.pending) L.push(`⏳ ${tr(lang, 'Tasdiq kutilmoqda', 'Ожидает подтверждения')}: ${som(s.pending)} ${cur}`);
+  if (pays.length) L.push('');
+  for (const x of pays) L.push(`${x.confirmedAt ? '✅' : '⏳'} ${fmtDay(x.paidAt)} · <b>${som(x.amount)}</b>${x.note ? ' · ' + escH(x.note) : ''}`);
+  return L.filter((x, i) => x !== '' || i === 1 || L[i - 1] !== '').join('\n');
+}
+export const PAY_ASK = (lang: Lang) => tr(lang, '💰 Qancha to‘lov qildingiz? Summani yozing, masalan: <b>1 000 000</b> yoki <b>1.5 mln avans</b>', '💰 Сколько вы оплатили? Напишите сумму, например: <b>1 000 000</b> или <b>1.5 млн аванс</b>');
+export const PAY_BAD = (lang: Lang) => tr(lang, 'Summani tushunmadim. Raqam bilan yozing, masalan: 1 000 000', 'Не понял сумму. Напишите числом, например: 1 000 000');

@@ -200,14 +200,14 @@ export async function botUsername(): Promise<string | null> {
 }
 
 /** Bog'langan foydalanuvchilarga Telegram xabari (bot tokeni bo'lmasa jim o'tadi). */
-export async function tgNotify(targets: { chatId: string | null | undefined; lang: Lang }[], text: (lang: Lang) => string) {
+export async function tgNotify(targets: { chatId: string | null | undefined; lang: Lang }[], text: (lang: Lang) => string, extra?: (lang: Lang) => object) {
   const t = process.env.TELEGRAM_BOT_TOKEN;
   if (!t) return;
   const seen = new Set<string>();
   for (const { chatId: chat_id, lang } of targets) {
     if (!chat_id || seen.has(chat_id)) continue;
     seen.add(chat_id);
-    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id, text: text(lang), parse_mode: 'HTML', link_preview_options: { is_disabled: true } }) })
+    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id, text: text(lang), parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...(extra?.(lang) ?? {}) }) })
       .catch((e: Error) => console.error('tgNotify:', e.message));
   }
 }
