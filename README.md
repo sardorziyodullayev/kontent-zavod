@@ -80,7 +80,7 @@ Panelga **login va parol** bilan kiriladi. Foydalanuvchilar *Sozlamalar → Foyd
 - Parol scrypt bilan saqlanadi (kamida 8 belgi); sessiya — imzolangan token (60 kun). Parol o'zgarsa, eski sessiyalar bekor bo'ladi.
 - Admin bergan parol **vaqtinchalik**: foydalanuvchi birinchi kirishda o'z parolini qo'yadi.
 - 15 daqiqada 10 ta xato urinishdan keyin kirish vaqtincha yopiladi — IP bo'yicha ham, login bo'yicha ham (IP almashtirib taxmin qilish ham to'xtaydi).
-- Xavfsizlik sarlavhalari: CSP, HSTS, nosniff ([server/index.ts](server/index.ts)). Sahifani faqat o'zimiz va Telegram ichiga joylash mumkin.
+- Xavfsizlik sarlavhalari: CSP, HSTS, nosniff ([server/app.ts](server/app.ts)). Sahifani faqat o'zimiz va Telegram ichiga joylash mumkin.
 - `ADMIN_TOKEN` avtomatlashtirish (worker, skriptlar) uchun ishlashda davom etadi; kirish oynasida *Token bilan kirish* havolasi zaxira yo'l sifatida bor. Birinchi admin loginini shu token bilan kirib yaratasiz.
 - Mahalliy rejimda (`ADMIN_TOKEN` ham, foydalanuvchi ham yo'q) panel kirishsiz ochiladi. `NODE_ENV=production` da token kamida 16 belgi bo'lmasa server ishga tushmaydi.
 
@@ -259,7 +259,9 @@ src/
   pages/         9 ta sahifa (narxtop.tsx — Narxtop bo'limi)
   lib/           TanStack Query ma'lumot qatlami, UI holati, lang.ts — UZ/RU
 server/
-  index.ts       Hono API, statik panel
+  app.ts         Hono API va statik panel (listen'siz — testlar shu ilovani chaqiradi)
+  index.ts       serverni portda ishga tushiradi (worker, keepalive)
+  telegram.ts    Mini App initData tekshiruvi, bot orqali fayl yuborish
   auth.ts        login/parol, sessiya, rollar, foydalanuvchilar, Telegram xabarlari
   narxtop.ts     Narxtop API va Excel hisobot
   schema.ts      Drizzle sxemasi
@@ -268,7 +270,8 @@ drizzle/         SQL migratsiyalar (server yonganda qo'llanadi)
 tools/
   worker.ts      joylash workeri va Telegram bot (Narxtop tugmalari ham)
   import-narxtop.ts, fill-styles.ts   bir martalik skriptlar
-tests/           Vitest
+  sim-bot.ts     botni haqiqiy Telegram'siz sinash: npx tsx tools/sim-bot.ts
+tests/           Vitest; api.test.ts — kirish, rollar, arxiv, to'lovlar, Telegram (vaqtinchalik baza, soxta fetch)
 ```
 
 GitHub Pages'da `dist/` statik demo sifatida chiqadi: API bo'lmagani uchun panel o'zi demo rejimga o'tadi.
