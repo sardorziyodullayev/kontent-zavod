@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { Menu, Moon, Plus, Search, Sun } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { alerts, localHour } from '@/core';
 import { AuthError, useAppData, useMe, useNow, type AppData, type MeInfo } from '@/lib/data';
 import { NarxtopPage } from '@/pages/narxtop';
@@ -11,14 +11,15 @@ import { ForcePassword, LangSwitch, ProfileCard } from './profile';
 import { Modal } from './ui/dialog';
 import { openModal, setTheme, setUI, useUI } from '@/lib/ui';
 import { cn } from '@/lib/utils';
-import { CommandPalette } from './command-palette';
-import { Dialogs } from './dialogs';
 import { Login } from './login';
 import { AutopilotBadge } from './factory-now';
 import { NAV } from './nav';
 import { BRAND, PixelLogo } from './brand';
 import { Button } from './ui/button';
-import { VideoSheet } from './video-sheet';
+// Faqat admin uchun kerak bo'ladigan og'ir qismlar (grafiklar, cmdk) alohida faylda yuklanadi.
+const VideoSheet = lazy(() => import('./video-sheet').then((m) => ({ default: m.VideoSheet })));
+const Dialogs = lazy(() => import('./dialogs').then((m) => ({ default: m.Dialogs })));
+const CommandPalette = lazy(() => import('./command-palette').then((m) => ({ default: m.CommandPalette })));
 
 function Sidebar({ data }: { data: AppData }) {
   const menu = useUI((s) => s.menu);
@@ -141,11 +142,13 @@ function AdminShell({ me }: { me: MeInfo | null }) {
             </div>
           </div>
         </header>
-        <main className="max-w-[1480px] pt-3 pb-16 md:pt-4"><Outlet /></main>
+        <main className="max-w-[1480px] pt-3 pb-16 md:pt-4"><Suspense fallback={<div className="p-6 text-muted">Yuklanmoqda…</div>}><Outlet /></Suspense></main>
       </div>
-      <VideoSheet state={data.state} />
-      <Dialogs state={data.state} />
-      <CommandPalette state={data.state} />
+      <Suspense fallback={null}>
+        <VideoSheet state={data.state} />
+        <Dialogs state={data.state} />
+        <CommandPalette state={data.state} />
+      </Suspense>
     </div>
   );
 }

@@ -1,27 +1,21 @@
-import { createHashHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
-import { Shell } from './components/shell';
-import { AnalyticsPage } from './pages/analytics';
-import { CalendarPage } from './pages/calendar';
-import { DashboardPage } from './pages/dashboard';
-import { FactoryPage } from './pages/factory';
-import { NarxtopRoute } from './components/shell';
-import { PlatformsPage } from './pages/platforms';
-import { ScriptsPage } from './pages/scripts';
-import { SettingsPage } from './pages/settings';
-import { VideosPage, videoSearch } from './pages/videos';
+import { createHashHistory, createRootRoute, createRoute, createRouter, lazyRouteComponent } from '@tanstack/react-router';
+import { NarxtopRoute, Shell } from './components/shell';
+import { videoSearch } from './pages/videos-search';
 
+// Admin sahifalari alohida fayllarda (lazy): ish beruvchi faqat Narxtop va qobiqni yuklaydi.
+// Narxtop sahifasi asosiy faylda — mijoz uchun tez ochilsin.
 const root = createRootRoute({ component: Shell });
-const r = (path: string, component: () => React.ReactNode) => createRoute({ getParentRoute: () => root, path, component });
+const r = (path: string, component: ReturnType<typeof lazyRouteComponent> | (() => React.ReactNode)) => createRoute({ getParentRoute: () => root, path, component });
 
 const routeTree = root.addChildren([
-  r('/', DashboardPage),
-  createRoute({ getParentRoute: () => root, path: '/videolar', component: VideosPage, validateSearch: videoSearch }),
-  r('/reja', CalendarPage),
-  r('/ssenariylar', ScriptsPage),
-  r('/tahlil', AnalyticsPage),
-  r('/platformalar', PlatformsPage),
-  r('/konveyer', FactoryPage),
-  r('/sozlamalar', SettingsPage),
+  r('/', lazyRouteComponent(() => import('./pages/dashboard'), 'DashboardPage')),
+  createRoute({ getParentRoute: () => root, path: '/videolar', component: lazyRouteComponent(() => import('./pages/videos'), 'VideosPage'), validateSearch: videoSearch }),
+  r('/reja', lazyRouteComponent(() => import('./pages/calendar'), 'CalendarPage')),
+  r('/ssenariylar', lazyRouteComponent(() => import('./pages/scripts'), 'ScriptsPage')),
+  r('/tahlil', lazyRouteComponent(() => import('./pages/analytics'), 'AnalyticsPage')),
+  r('/platformalar', lazyRouteComponent(() => import('./pages/platforms'), 'PlatformsPage')),
+  r('/konveyer', lazyRouteComponent(() => import('./pages/factory'), 'FactoryPage')),
+  r('/sozlamalar', lazyRouteComponent(() => import('./pages/settings'), 'SettingsPage')),
   r('/narxtop', NarxtopRoute),
 ]);
 
