@@ -77,8 +77,10 @@ Panelga **login va parol** bilan kiriladi. Foydalanuvchilar *Sozlamalar → Foyd
 | **Admin** | Butun panel |
 | **Mijoz** | Faqat Narxtop bo'limi (server ham boshqa API'larni yopadi) |
 
-- Parol scrypt bilan saqlanadi; sessiya — imzolangan token (60 kun). Parol o'zgarsa, eski sessiyalar bekor bo'ladi.
-- Bitta IP dan 15 daqiqada 10 ta xato urinishdan keyin kirish vaqtincha yopiladi.
+- Parol scrypt bilan saqlanadi (kamida 8 belgi); sessiya — imzolangan token (60 kun). Parol o'zgarsa, eski sessiyalar bekor bo'ladi.
+- Admin bergan parol **vaqtinchalik**: foydalanuvchi birinchi kirishda o'z parolini qo'yadi.
+- 15 daqiqada 10 ta xato urinishdan keyin kirish vaqtincha yopiladi — IP bo'yicha ham, login bo'yicha ham (IP almashtirib taxmin qilish ham to'xtaydi).
+- Xavfsizlik sarlavhalari: CSP, HSTS, nosniff ([server/index.ts](server/index.ts)). Sahifani faqat o'zimiz va Telegram ichiga joylash mumkin.
 - `ADMIN_TOKEN` avtomatlashtirish (worker, skriptlar) uchun ishlashda davom etadi; kirish oynasida *Token bilan kirish* havolasi zaxira yo'l sifatida bor. Birinchi admin loginini shu token bilan kirib yaratasiz.
 - Mahalliy rejimda (`ADMIN_TOKEN` ham, foydalanuvchi ham yo'q) panel kirishsiz ochiladi. `NODE_ENV=production` da token kamida 16 belgi bo'lmasa server ishga tushmaydi.
 
@@ -186,6 +188,8 @@ Sardor NARXTOP uchun AI videolar tayyorlaydi. Ish beruvchi ssenariylarni yuborad
 - **Vazifalar** — holat: *Yangi → Ishlanmoqda → Tekshiruvda → Tuzatish → Tayyor*. Ro'yxatda holatni bir bosishda o'zgartirish mumkin. Vazifa kartasida: yo'nalish, **uslub** (Motion / 2D animatsiya / Realistik), video havolasi, muddat, ssenariy, Telegram'dan kelgan fayllar, izohlar va o'zgarishlar tarixi.
 - **Yo'nalishlar bo'yicha** — sonlar avtomatik (jadvaldagi qo'lda sanash o'rniga). Yo'nalish nomlari bir xil yoziladi ("Аавтосалоны"/"Автосалон" → Avtosalonlar).
 - **To'lovlar** — oy summasi, to'langan, qoldiq, progress; har to'lovda kim yozgani va tasdiq holati. Tezkor summa: "Butun qoldiq", "Yarmi".
+- **Arxiv** — vazifa o'chirilmaydi, arxivga olinadi va istalgan payt tiklanadi (*Arxiv* filtri). Butunlay o'chirish faqat adminda.
+- **Zaxira nusxa** — *Sozlamalar → Narxtop zaxira nusxasi*: oylar, vazifalar (arxiv bilan) va to'lovlar bitta JSON faylda; shu fayldan tiklash ham shu yerda (faqat admin).
 - **Til** — UZ | RU (sarlavhada, kirish oynasida, profilda). Mijozlar uchun standart — rus tili. Tanlov profilga yoziladi: bot va Telegram xabarlari ham shu tilda.
 - Telefon uchun moslangan; qorong'i va yorug' mavzu.
 
@@ -206,7 +210,7 @@ Ulash: saytda *Telegram'ni ulash* → botda *Start* (bir martalik havola, 30 daq
 | 🌐 Til | o'zbekcha / ruscha |
 | ℹ️ Yordam | qisqa yo'riqnoma va panel havolasi |
 
-Mijoz botga oddiy matn yozsa ham vazifa bo'ladi; Sardordan esa bot "Vazifa qilib qo'shaymi?" deb so'raydi. Bot long polling bilan ishlaydi (javob darhol keladi). Xabarlar: yangi vazifa, "Tekshiring", "Tayyor", "Tuzatish kerak", to'lov yozildi / tasdiqlandi — har kimga o'z tilida.
+Mijoz botga ssenariyga o'xshagan xabar (fayl, bir necha qator yoki 40+ belgi) yozsa, darhol vazifa bo'ladi; qisqa xabardan ("ok", "rahmat") va Sardorning xabaridan keyin bot "Vazifa qilib qo'shaymi?" deb so'raydi. Bot long polling bilan ishlaydi (javob darhol keladi). Xabarlar: yangi vazifa, "Tekshiring", "Tayyor", "Tuzatish kerak", to'lov yozildi / tasdiqlandi — har kimga o'z tilida.
 
 ### Ma'lumotlar va API
 
@@ -221,6 +225,8 @@ Jadvallar ([server/schema.ts](server/schema.ts)): `users` (login, rol, til, Tele
 | GET | `/api/narxtop` | oylar, vazifalar, to'lovlar, yo'nalish va uslublar |
 | POST/PATCH/DELETE | `/api/narxtop/orders…`, `/periods…`, `/payments…` | vazifa, oy, to'lov |
 | POST | `/api/narxtop/payments/:id/confirm` | to'lovni tasdiqlash (admin) |
+| DELETE / POST | `/api/narxtop/orders/:id`, `/orders/:id/restore` | arxivga olish (`?hard=1` — butunlay, admin) va tiklash |
+| GET / POST | `/api/narxtop/backup.json`, `/api/narxtop/restore` | zaxira nusxa va undan tiklash (admin) |
 | GET | `/api/narxtop/report.xlsx?period=<id\|all>&lang=<uz\|ru>` | Excel hisobot |
 | POST | `/api/narxtop/tg/…`, `/api/users/tg-…` | bot uchun (ADMIN_TOKEN bilan, Telegram foydalanuvchisi nomidan) |
 

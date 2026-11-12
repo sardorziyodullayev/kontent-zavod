@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { applyAction, emptyState, seed, tick, type Action, type State } from '@/core';
 import type { Me, NarxtopData } from '@/core/narxtop';
+import { lang } from './lang';
 import { ls } from './utils';
 
 export type Mode = 'server' | 'demo';
@@ -158,7 +159,7 @@ export async function deleteMedia(videoId: string) {
 
 /** Server API: JSON so'rov, xato bo'lsa server matni bilan Error. 401 — qayta kirish. */
 export async function apiCall<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const r = await fetch(`${API}${path}`, { method, cache: 'no-store', headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...authHeader() }, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const r = await fetch(`${API}${path}`, { method, cache: 'no-store', headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), 'X-Lang': lang(), ...authHeader() }, body: body !== undefined ? JSON.stringify(body) : undefined });
   // sessiya tugagan yoki parol o'zgargan: kirish oynasiga qaytamiz (request() dagi kabi)
   if (r.status === 401 && !path.startsWith('/auth/')) { logout(); location.reload(); throw new AuthError('Sessiya tugadi, qayta kiring'); }
   const j = await r.json().catch(() => ({}));
@@ -200,7 +201,7 @@ export function useNarxtopMutation() {
 
 /** Himoyalangan faylni (Excel hisobot, ssenariy fayli) yuklab olish. */
 export async function downloadAuthed(path: string, fallback: string) {
-  const r = await fetch(`${API}${path}`, { headers: authHeader(), cache: 'no-store' });
+  const r = await fetch(`${API}${path}`, { headers: { 'X-Lang': lang(), ...authHeader() }, cache: 'no-store' });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Yuklab bo‘lmadi');
   const cd = r.headers.get('Content-Disposition') ?? '';
   const m = /filename\*=UTF-8''([^;]+)/.exec(cd);

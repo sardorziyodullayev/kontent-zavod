@@ -3,7 +3,7 @@
 export type OrderStatus = 'new' | 'work' | 'review' | 'fix' | 'done';
 export type Role = 'admin' | 'client';
 
-export interface Me { id: number; login: string; name: string; role: Role; tgLinked: boolean; lang: Lang }
+export interface Me { id: number; login: string; name: string; role: Role; tgLinked: boolean; lang: Lang; mustChange: boolean }
 export interface Period { id: number; name: string; price: number; createdAt: number; closedAt: number | null }
 export interface Payment { id: number; periodId: number; amount: number; paidAt: number; note: string; createdBy: string; confirmedAt: number | null }
 export interface OrderLog { t: number; who: string; text: string }
@@ -11,8 +11,10 @@ export interface Order {
   id: number; periodId: number; title: string; direction: string; style: string; status: OrderStatus;
   script: string; videoUrl: string; note: string; deadline: number | null; createdAt: number; doneAt: number | null;
   createdBy: string; source: 'panel' | 'telegram' | 'import'; files: { name: string; fileId: string }[]; log: OrderLog[];
+  /** arxivga olingan vaqt (o'chirilgan vazifa tiklanishi mumkin) */
+  deletedAt: number | null;
 }
-export interface NarxtopData { periods: Period[]; orders: Order[]; payments: Payment[]; directions: string[]; styles: string[]; bot: string | null }
+export interface NarxtopData { periods: Period[]; orders: Order[]; /** arxivdagi (o'chirilgan) vazifalar */ archived: Order[]; payments: Payment[]; directions: string[]; styles: string[]; bot: string | null }
 
 /** Holatlar ish tartibida. ru — Excel hisobot uchun (boshliqlar ruscha jadval ko'rib o'rgangan). */
 export const STATUSES: { id: OrderStatus; name: string; ru: string; hint: string }[] = [
@@ -110,7 +112,7 @@ export const statusHint = (s: OrderStatus, lang: Lang) => (lang === 'ru' ? HINT_
 export function logLabel(text: string, lang: Lang): string {
   if (lang !== 'ru') return text;
   const FIX: [string, string][] = [['Vazifa qo‘shildi', 'Задача добавлена'], ['Telegram orqali yuborildi', 'Отправлено через Telegram'], ['Google jadvaldan ko‘chirildi', 'Перенесено из Google-таблицы'],
-    ['Nomi o‘zgardi', 'Изменено название'], ['Ssenariy yangilandi', 'Сценарий обновлён'], ['Video havolasi', 'Ссылка на видео'], ['Muddat', 'Срок'], ['Oy o‘zgardi', 'Изменён месяц']];
+    ['Nomi o‘zgardi', 'Изменено название'], ['Ssenariy yangilandi', 'Сценарий обновлён'], ['Video havolasi', 'Ссылка на видео'], ['Muddat', 'Срок'], ['Oy o‘zgardi', 'Изменён месяц'], ['Arxivga olindi', 'Перенесено в архив'], ['Arxivdan tiklandi', 'Восстановлено из архива']];
   for (const [uz, ru] of FIX) if (text === uz) return ru;
   if (text.startsWith('Holat: ')) {
     let t = 'Статус: ' + text.slice(7);
@@ -213,3 +215,36 @@ export function payText(d: NarxtopData, lang: Lang = 'uz'): string {
 }
 export const PAY_ASK = (lang: Lang) => tr(lang, '💰 Qancha to‘lov qildingiz? Summani yozing, masalan: <b>1 000 000</b> yoki <b>1.5 mln avans</b>', '💰 Сколько вы оплатили? Напишите сумму, например: <b>1 000 000</b> или <b>1.5 млн аванс</b>');
 export const PAY_BAD = (lang: Lang) => tr(lang, 'Summani tushunmadim. Raqam bilan yozing, masalan: 1 000 000', 'Не понял сумму. Напишите числом, например: 1 000 000');
+
+// ---------- server xato xabarlari: rus tilida ko'rsatish ----------
+const ERR_RU: Record<string, string> = {
+  'Kirish kerak': 'Нужно войти',
+  'Login yoki parol noto‘g‘ri': 'Неверный логин или пароль',
+  'Juda ko‘p urinish. 15 daqiqadan keyin qayta urinib ko‘ring.': 'Слишком много попыток. Попробуйте через 15 минут.',
+  'Bu bo‘lim siz uchun yopiq': 'Этот раздел для вас закрыт',
+  'Faqat admin uchun': 'Только для администратора',
+  'Avval login va parol bilan kiring': 'Сначала войдите по логину и паролю',
+  'Eski parol noto‘g‘ri': 'Текущий пароль неверный',
+  'Parol kamida 8 belgi bo‘lsin': 'Пароль должен быть не короче 8 символов',
+  'Yangi parol eskisidan farq qilsin': 'Новый пароль должен отличаться от старого',
+  'Bu login band': 'Этот логин уже занят',
+  'Login 3–32 belgi: lotin harflari, raqam, nuqta, chiziqcha': 'Логин: 3–32 символа, латинские буквы, цифры, точка, дефис',
+  'Foydalanuvchi topilmadi': 'Пользователь не найден',
+  'O‘zingizni o‘chira olmaysiz': 'Нельзя удалить самого себя',
+  'Vazifa nomini yozing': 'Укажите название задачи',
+  'Vazifa topilmadi': 'Задача не найдена',
+  'Noma’lum holat': 'Неизвестный статус',
+  'Oy nomini yozing': 'Укажите название месяца',
+  'Oy topilmadi': 'Месяц не найден',
+  'Summa noto‘g‘ri': 'Неверная сумма',
+  'Summani yozing': 'Укажите сумму',
+  'To‘lov topilmadi': 'Оплата не найдена',
+  'Tasdiqlangan to‘lovni faqat Sardor o‘chira oladi': 'Подтверждённую оплату может удалить только Сардор',
+  'Faqat Sardor tasdiqlaydi': 'Подтверждает только Сардор',
+  'Fayl topilmadi': 'Файл не найден',
+  'Telegram faylni bermadi (20 MB dan katta bo‘lishi mumkin)': 'Telegram не отдал файл (возможно, он больше 20 МБ)',
+  'Telegram ulanmagan': 'Telegram не подключён',
+  'Zaxira fayli noto‘g‘ri': 'Неверный файл резервной копии',
+  'Server xatosi': 'Ошибка сервера',
+};
+export const errLabel = (msg: string, lang: Lang) => (lang === 'ru' ? ERR_RU[msg] ?? msg : msg);

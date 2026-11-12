@@ -20,7 +20,8 @@ export async function loadAll(): Promise<NarxtopData> {
   ]);
   const used = (k: 'direction' | 'style') => o.map((x) => x[k]).filter(Boolean);
   const uniq = (a: string[]) => [...new Set(a)];
-  return { periods: p, orders: o as Order[], payments: pay, directions: uniq([...DEFAULT_DIRECTIONS, ...used('direction')]), styles: uniq([...DEFAULT_STYLES, ...used('style')]), bot: await botUsername() };
+  const live = (o as Order[]).filter((x) => !x.deletedAt);
+  return { periods: p, orders: live, archived: (o as Order[]).filter((x) => x.deletedAt), payments: pay, directions: uniq([...DEFAULT_DIRECTIONS, ...used('direction')]), styles: uniq([...DEFAULT_STYLES, ...used('style')]), bot: await botUsername() };
 }
 
 async function currentPeriodId(): Promise<number> {
@@ -255,7 +256,47 @@ export const narxtop = new Hono<Env>()
     return c.json(await createOrder(c.get('user'), b, b.source === 'import' && c.get('user').role === 'admin' ? 'import' : 'panel'), 201);
   })
   .patch('/orders/:id', async (c) => c.json(await updateOrder(c.get('user'), Number(c.req.param('id')), await c.req.json())))
-  .delete('/orders/:id', async (c) => { await db.delete(orders).where(eq(orders.id, Number(c.req.param('id')))); return c.json({ ok: true }); })
+  // O'chirish — arxivga olish: vazifa bazada qoladi va tiklanadi. Butunlay o'chirish (?hard=1) faqat admin uchun.
+  .delete('/orders/:id', async (c) => {
+    const u = c.get('user'), id = Number(c.req.param('id'));
+    const [o] = await db.select().from(orders).where(eq(orders.id, id));
+    if (!o) return c.json({ ok: true });
+    if (c.req.query('hard') === '1') {
+      if (u.role !== 'admin') throw new HTTPException(403, { message: 'Faqat admin uchun' });
+      await db.delete(orders).where(eq(orders.id, id));
+      return c.json({ ok: true });
+    }
+    const now = Date.now();
+    await db.update(orders).set({ deletedAt: now, log: [...o.log, { t: now, who: u.name, text: 'Arxivga olindi' }].slice(-60) }).where(eq(orders.id, id));
+    await notifyOther(u, (l) => `🗑 <b>${tr(l, 'Vazifa arxivga olindi', 'Задача перенесена в архив')}:</b> #${o.id} ${esc(o.title)}\n👤 ${esc(u.name)}`);
+    return c.json({ ok: true });
+  })
+  .post('/orders/:id/restore', async (c) => {
+    const u = c.get('user'), id = Number(c.req.param('id'));
+    const [o] = await db.select().from(orders).where(eq(orders.id, id));
+    if (!o) throw new HTTPException(404, { message: 'Vazifa topilmadi' });
+    const now = Date.now();
+    await db.update(orders).set({ deletedAt: null, log: [...o.log, { t: now, who: u.name, text: 'Arxivdan tiklandi' }].slice(-60) }).where(eq(orders.id, id));
+    return c.json({ ok: true });
+  })
+  // Zaxira nusxa: oylar, vazifalar (arxiv bilan), to'lovlar va foydalanuvchilar ro'yxati (parolsiz). Faqat admin.
+  .get('/backup.json', adminOnly, async (c) => {
+    const [p, o, pay, us] = await Promise.all([db.select().from(periods).orderBy(periods.id), db.select().from(orders).orderBy(orders.id), db.select().from(payments).orderBy(payments.id), db.select().from(users)]);
+    const body = { kind: 'narxtop-backup', version: 1, exportedAt: Date.now(), periods: p, orders: o, payments: pay, users: us.map((x) => ({ login: x.login, name: x.name, role: x.role, lang: x.lang })) };
+    return c.body(JSON.stringify(body, null, 1), 200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="narxtop-zaxira-${new Date().toISOString().slice(0, 10)}.json"` });
+  })
+  // Zaxiradan tiklash: hozirgi oylar, vazifalar va to'lovlar fayldagilar bilan almashtiriladi (foydalanuvchilarga tegilmaydi). Faqat admin.
+  .post('/restore', adminOnly, async (c) => {
+    const b = await c.req.json<{ kind?: string; periods?: (typeof periods.$inferInsert)[]; orders?: (typeof orders.$inferInsert)[]; payments?: (typeof payments.$inferInsert)[] }>();
+    if (b.kind !== 'narxtop-backup' || !Array.isArray(b.periods) || !Array.isArray(b.orders) || !Array.isArray(b.payments)) throw new HTTPException(400, { message: 'Zaxira fayli noto‘g‘ri' });
+    await db.transaction(async (tx) => {
+      await tx.delete(payments); await tx.delete(orders); await tx.delete(periods);
+      for (let i = 0; i < b.periods!.length; i += 50) await tx.insert(periods).values(b.periods!.slice(i, i + 50));
+      for (let i = 0; i < b.orders!.length; i += 50) await tx.insert(orders).values(b.orders!.slice(i, i + 50));
+      for (let i = 0; i < b.payments!.length; i += 50) await tx.insert(payments).values(b.payments!.slice(i, i + 50));
+    });
+    return c.json({ ok: true, periods: b.periods.length, orders: b.orders.length, payments: b.payments.length });
+  })
   /** Telegram orqali kelgan fayl (ssenariy .docx/.pdf): bot API dan olib beriladi. */
   .get('/orders/:id/file/:idx', async (c) => {
     const [o] = await db.select().from(orders).where(eq(orders.id, Number(c.req.param('id'))));

@@ -8,7 +8,9 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { logger } from 'hono/logger';
 import { ActionError, applyAction, emptyState, nextQueue, seed, tick, toCSV, type Action, type State } from '../src/core';
-import { auth, requireUser, type Env } from './auth';
+import crypto from 'node:crypto';
+import { errLabel } from '../src/core/narxtop';
+import { auth, reqLang, requireUser, type Env } from './auth';
 import { initDb, loadState, saveState } from './db';
 import { narxtop } from './narxtop';
 import { restoreFiles, restoreStatus } from './files';
@@ -92,14 +94,35 @@ const api = new Hono<Env>()
   .get('/health', (c) => c.json({ ok: true, auth: !!TOKEN, files: restoreStatus }));
 
 const app = new Hono();
+// Xavfsizlik sarlavhalari. CSP: skriptlar faqat o'zimizdan (index.html dagi mavzu skripti xesh bilan ruxsat etiladi),
+// shriftlar Google Fonts'dan; sahifani faqat o'zimiz va Telegram (Mini App) ichiga joylash mumkin.
+const inlineHashes = (() => {
+  try {
+    const html = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
+    return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`).join(' ');
+  } catch { return ''; }
+})();
+const CSP = [
+  "default-src 'self'", `script-src 'self' ${inlineHashes} https://telegram.org`, "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:", "media-src 'self' blob:", "connect-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'",
+  "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
+].join('; ');
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (!c.req.path.startsWith('/pub/')) c.header('Content-Security-Policy', CSP);
+});
 app.use('/api/*', logger());
 app.route('/api', api);
 app.route('/pub', publicMedia);
 app.onError((err, c) => {
-  if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+  if (err instanceof HTTPException) return c.json({ error: errLabel(err.message, reqLang(c)) }, err.status);
   if (err instanceof ActionError || err instanceof SyntaxError) return c.json({ error: err.message }, 400);
   console.error(err);
-  return c.json({ error: 'Server xatosi' }, 500);
+  return c.json({ error: errLabel('Server xatosi', reqLang(c)) }, 500);
 });
 app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: 'Topilmadi' }, 404) : c.text('Topilmadi', 404)));
 

@@ -1,6 +1,6 @@
 import { Download, LogOut, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { allPosts, fmtDate, fmtTime, toCSV, type State } from '@/core';
-import { ProfileCard, UsersCard } from '@/components/profile';
+import { BackupCard, ProfileCard, UsersCard } from '@/components/profile';
 import { useAppState } from '@/components/shell';
 import { useMe } from '@/lib/data';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -19,6 +19,7 @@ export function SettingsPage() {
     <div className="grid gap-4 lg:grid-cols-2">
       {me && <ProfileCard />}
       {me?.role === 'admin' && <UsersCard />}
+      {me?.role === 'admin' && <BackupCard />}
       <Card>
         <CardHead title="Ish joyi" />
         <form className="grid gap-3.5" onSubmit={(e) => { e.preventDefault(); act.mutate({ type: 'workspace.update', payload: { name: String(new FormData(e.currentTarget).get('name')).trim() } }); }}>

@@ -84,6 +84,8 @@ export const users = sqliteTable('users', {
   tgId: text('tg_id'),
   /** panel va bot tili: ish beruvchi rus tilida ishlaydi */
   lang: text('lang', { enum: ['uz', 'ru'] }).notNull().default('uz'),
+  /** parolni admin bergan: birinchi kirishda almashtirish shart */
+  mustChange: integer('must_change', { mode: 'boolean' }).notNull().default(false),
   linkCode: text('link_code'),
   linkExp: integer('link_exp'),
   createdAt: integer('created_at').notNull(),
@@ -121,6 +123,8 @@ export const orders = sqliteTable(
     source: text('source', { enum: ['panel', 'telegram', 'import'] }).notNull().default('panel'),
     files: text('files', { mode: 'json' }).$type<OrderFile[]>().notNull().default([]),
     log: text('log', { mode: 'json' }).$type<OrderLog[]>().notNull().default([]),
+    /** arxivga olingan vaqt: o'chirilgan vazifa bazada qoladi va tiklanadi; null — faol */
+    deletedAt: integer('deleted_at'),
   },
   (t) => [index('orders_period_idx').on(t.periodId)],
 );

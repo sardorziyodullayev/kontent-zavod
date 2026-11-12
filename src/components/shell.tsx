@@ -5,7 +5,8 @@ import { alerts, localHour } from '@/core';
 import { AuthError, useAppData, useMe, useNow, type AppData, type MeInfo } from '@/lib/data';
 import { NarxtopPage } from '@/pages/narxtop';
 import { L, syncLang } from '@/lib/lang';
-import { LangSwitch, ProfileCard } from './profile';
+import { AskHost } from './ask';
+import { ForcePassword, LangSwitch, ProfileCard } from './profile';
 import { Modal } from './ui/dialog';
 import { openModal, setTheme, setUI, useUI } from '@/lib/ui';
 import { cn } from '@/lib/utils';
@@ -57,8 +58,9 @@ export function Shell() {
   if (me.error instanceof AuthError) return <Login message={me.error.message} />;
   if (me.isLoading) return <div className="p-10 text-muted">{L('Yuklanmoqda…', 'Загрузка…')}</div>;
   syncLang(me.data ?? null);
-  if (me.data?.role === 'client') return <ClientShell me={me.data} />;
-  return <AdminShell me={me.data ?? null} />;
+  if (me.data?.mustChange && me.data.via === 'session') return <ForcePassword name={me.data.name} />;
+  if (me.data?.role === 'client') return <><ClientShell me={me.data} /><AskHost /></>;
+  return <><AdminShell me={me.data ?? null} /><AskHost /></>;
 }
 
 export function NarxtopRoute() {

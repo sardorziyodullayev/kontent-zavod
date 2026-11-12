@@ -50,6 +50,13 @@
       "when": 1794328122095,
       "tag": "0006_style_names",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794499038957,
+      "tag": "0007_same_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

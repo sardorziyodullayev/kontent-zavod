@@ -1,11 +1,12 @@
 // Narxtop bo'limi: ish beruvchi yuboradigan vazifalar (ssenariylar), holati, to'lovlar va Excel hisobot.
 // Ikki kishi ishlatadi: ish beruvchi (mijoz roli, odatda rus tilida) va Sardor (admin). Hamma narsa bir qarashda tushunarli bo'lsin.
-import { CalendarCheck, CalendarPlus, Check, ChevronDown, Download, ExternalLink, FileText, Layers, MessageSquare, Plus, RotateCcw, Search, Send, Trash2, Wallet } from 'lucide-react';
+import { Archive, CalendarCheck, CalendarPlus, Check, ChevronDown, Download, ExternalLink, FileText, Layers, MessageSquare, Plus, RotateCcw, Search, Send, Trash2, Wallet } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { STATUSES, label, logLabel, som, statusHint, statusLabel, summarize, type NarxtopData, type Order, type OrderStatus, type Period } from '@/core/narxtop';
 import { Button } from '@/components/ui/button';
 import { Modal, Sheet } from '@/components/ui/dialog';
 import { Card, CardHead, Empty, Field, Meter } from '@/components/ui/primitives';
+import { ask, tell } from '@/components/ask';
 import { TelegramLink } from '@/components/profile';
 import { downloadAuthed, useNarxtop, useNarxtopMutation, type MeInfo } from '@/lib/data';
 import { L, lang } from '@/lib/lang';
@@ -74,12 +75,13 @@ function StyleChip({ style }: { style: string }) {
 }
 
 const LS_PERIOD = 'kz-narxtop-period';
+type Filter = OrderStatus | 'all' | 'open' | 'archive';
 
 export function NarxtopPage({ me }: { me: MeInfo | null }) {
   const q = useNarxtop(me !== null);
   const [openId, setOpenId] = useState<number | undefined>(linkedId);
   const [periodId, setPeriodId] = useState<number | null>(() => Number(ls.get(LS_PERIOD)) || null);
-  const [filter, setFilter] = useState<OrderStatus | 'all' | 'open'>('open');
+  const [filter, setFilter] = useState<Filter>('open');
   const [text, setText] = useState('');
   const [newOpen, setNewOpen] = useState(false);
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -117,7 +119,7 @@ export function NarxtopPage({ me }: { me: MeInfo | null }) {
           <button className="flex shrink-0 items-center gap-1 rounded-full px-3 py-2 text-[13px] text-muted hover:text-ink" onClick={() => setPeriodOpen(true)}><CalendarPlus size={15} />{L('Yangi oy', 'Новый месяц')}</button>
         </div>
         <div className="ml-auto grid grid-cols-2 gap-2 max-sm:w-full sm:flex">
-          <Button variant="dark" className="justify-center" onClick={() => downloadAuthed(`/narxtop/report.xlsx?period=${overview ? 'all' : period?.id ?? ''}&lang=${lang()}`, 'narxtop-report.xlsx').catch((e: Error) => alert(e.message))} disabled={!period && !overview}>
+          <Button variant="dark" className="justify-center" onClick={() => downloadAuthed(`/narxtop/report.xlsx?period=${overview ? 'all' : period?.id ?? ''}&lang=${lang()}`, 'narxtop-report.xlsx').catch((e: Error) => tell(e.message))} disabled={!period && !overview}>
             <Download size={16} />{overview ? L('Excel: barcha oylar', 'Excel: все месяцы') : L('Excel hisobot', 'Отчёт Excel')}
           </Button>
           <Button variant="primary" className="justify-center" onClick={() => setNewOpen(true)}><Plus size={17} />{L('Yangi vazifa', 'Новая задача')}</Button>
@@ -138,7 +140,7 @@ export function NarxtopPage({ me }: { me: MeInfo | null }) {
 const periodName = (name: string) => (lang() === 'ru' ? name.replace(/^(\d+)-oy$/, '$1-й месяц') : name);
 
 function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
-  d: NarxtopData; period: Period; me: MeInfo; filter: OrderStatus | 'all' | 'open'; setFilter: (f: OrderStatus | 'all' | 'open') => void; text: string; setText: (s: string) => void; open: (id: number) => void;
+  d: NarxtopData; period: Period; me: MeInfo; filter: Filter; setFilter: (f: Filter) => void; text: string; setText: (s: string) => void; open: (id: number) => void;
 }) {
   const mut = useNarxtopMutation();
   const os = d.orders.filter((o) => o.periodId === period.id);
@@ -150,10 +152,12 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
     .filter((o) => (filter === 'all' ? true : filter === 'open' ? o.status !== 'done' : o.status === filter))
     .filter((o) => !needle || `${o.title} ${o.direction} ${nm(o.direction)} ${o.style} ${o.script}`.toLowerCase().includes(needle))
     .reverse();
-  const tabs: { id: OrderStatus | 'all' | 'open'; name: string; n: number }[] = [
+  const tabs: { id: Filter; name: string; n: number }[] = [
     { id: 'open', name: L('Bajarilmagan', 'Невыполненные'), n: s.open }, { id: 'all', name: L('Hammasi', 'Все'), n: s.total },
     ...STATUSES.map((x) => ({ id: x.id, name: st(x.id), n: s.byStatus[x.id] })),
   ];
+  const arch = d.archived.filter((o) => o.periodId === period.id);
+  if (arch.length || filter === 'archive') tabs.push({ id: 'archive', name: L('Arxiv', 'Архив'), n: arch.length });
   const pn = periodName(period.name);
 
   return (
@@ -162,12 +166,12 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
         <div className="flex flex-wrap items-center gap-3 rounded-[18px] bg-[color-mix(in_srgb,var(--good)_12%,transparent)] px-4 py-3">
           <CalendarCheck size={18} className="text-good-text" />
           <span className="min-w-0 flex-1 text-[13.5px]"><b>{pn} {L('yakunlangan', 'завершён')}</b> · {dmy(period.closedAt)}. {L('Bu oy hisobot uchun saqlanadi, yangi vazifalar joriy oyga yoziladi.', 'Месяц сохранён для отчёта, новые задачи попадают в текущий месяц.')}</span>
-          <Button size="sm" variant="ghost" onClick={() => confirm(L(`${pn} qayta ochilsinmi?`, `Открыть ${pn} снова?`)) && mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { closed: false } })}><RotateCcw size={14} />{L('Qayta ochish', 'Открыть снова')}</Button>
+          <Button size="sm" variant="ghost" onClick={async () => (await ask(L(`${pn} qayta ochilsinmi?`, `Открыть ${pn} снова?`))) && mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { closed: false } })}><RotateCcw size={14} />{L('Qayta ochish', 'Открыть снова')}</Button>
         </div>
       ) : (
         <div className="flex items-center gap-2 text-[13px] text-muted">
           <span className="size-2 shrink-0 rounded-full bg-accent" /><span><b className="text-ink">{pn}</b> — {L('joriy oy', 'текущий месяц')}</span>
-          <Button size="sm" variant="ghost" className="ml-auto max-sm:px-2" onClick={() => confirm(L(`${pn} yakunlansinmi? Oy hisobot uchun saqlanadi; kerak bo‘lsa qayta ochish mumkin.`, `Завершить ${pn}? Месяц сохранится для отчёта; при необходимости его можно открыть снова.`)) && mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { closed: true } })}>
+          <Button size="sm" variant="ghost" className="ml-auto max-sm:px-2" onClick={async () => (await ask(L(`${pn} yakunlansinmi? Oy hisobot uchun saqlanadi; kerak bo‘lsa qayta ochish mumkin.`, `Завершить ${pn}? Месяц сохранится для отчёта; при необходимости его можно открыть снова.`), { ok: L('Yakunlash', 'Завершить') })) && mut.mutate({ path: `/periods/${period.id}`, method: 'PATCH', body: { closed: true } })}>
             <CalendarCheck size={14} />{L('Oyni yakunlash', 'Завершить месяц')}
           </Button>
         </div>
@@ -212,7 +216,25 @@ function PeriodView({ d, period, me, filter, setFilter, text, setText, open }: {
               </button>
             ))}
           </div>
-          {!list.length ? <Empty>{os.length ? L('Bu filtrda vazifa yo‘q.', 'В этом фильтре задач нет.') : L('Bu oyda hali vazifa yo‘q. “Yangi vazifa” tugmasini bosing.', 'В этом месяце задач пока нет. Нажмите «Новая задача».')}</Empty> : (
+          {filter === 'archive' ? (
+            !arch.length ? <Empty>{L('Arxiv bo‘sh.', 'Архив пуст.')}</Empty> : (
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+                {arch.map((o) => (
+                  <li key={o.id} className="flex min-w-0 flex-wrap items-center gap-2 rounded-[16px] border border-dashed border-line-2 px-3 py-2.5">
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-[14.5px] font-medium text-ink-2">{o.title}</span>
+                      <span className="text-[12px] text-muted">{L('arxivga olingan', 'в архиве с')} {dmy(o.deletedAt ?? 0)} · {st(o.status)}</span>
+                    </span>
+                    <Button size="sm" onClick={() => mut.mutate({ path: `/orders/${o.id}/restore`, body: {} })}><RotateCcw size={14} />{L('Tiklash', 'Восстановить')}</Button>
+                    {me.role === 'admin' && (
+                      <Button size="icon-sm" variant="danger" aria-label={L('Butunlay o‘chirish', 'Удалить навсегда')} title={L('Butunlay o‘chirish', 'Удалить навсегда')}
+                        onClick={async () => (await ask(L(`“${o.title}” butunlay o‘chirilsinmi?\nBuni qaytarib bo‘lmaydi.`, `Удалить «${o.title}» навсегда?\nЭто нельзя отменить.`), { danger: true, ok: L('Butunlay o‘chirish', 'Удалить навсегда') })) && mut.mutate({ path: `/orders/${o.id}?hard=1`, method: 'DELETE' })}><Trash2 size={14} /></Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : !list.length ? <Empty>{os.length ? L('Bu filtrda vazifa yo‘q.', 'В этом фильтре задач нет.') : L('Bu oyda hali vazifa yo‘q. “Yangi vazifa” tugmasini bosing.', 'В этом месяце задач пока нет. Нажмите «Новая задача».')}</Empty> : (
             <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
               {list.map((o) => (
                 <li key={o.id} className="group flex min-w-0 items-center gap-2.5 rounded-[16px] border border-line px-2.5 py-2.5 hover:bg-surface-2 sm:gap-3 sm:px-3">
@@ -301,7 +323,7 @@ function MonthsOverview({ d, pick }: { d: NarxtopData; pick: (id: number) => voi
                   <td className="text-right tnum">{som(s.paid)}</td>
                   <td className={cn('text-right tnum', s.left > 0 && 'font-semibold text-critical-text')}>{s.price ? som(s.left) : '—'}</td>
                   <td className="text-right">
-                    <Button size="icon-sm" variant="ghost" aria-label={`${p.name} Excel`} title={L('Shu oy Excel hisoboti', 'Отчёт Excel за этот месяц')} onClick={(e) => { e.stopPropagation(); downloadAuthed(`/narxtop/report.xlsx?period=${p.id}&lang=${lang()}`, 'narxtop-report.xlsx').catch((x: Error) => alert(x.message)); }}><Download size={15} /></Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`${p.name} Excel`} title={L('Shu oy Excel hisoboti', 'Отчёт Excel за этот месяц')} onClick={(e) => { e.stopPropagation(); downloadAuthed(`/narxtop/report.xlsx?period=${p.id}&lang=${lang()}`, 'narxtop-report.xlsx').catch((x: Error) => tell(x.message)); }}><Download size={15} /></Button>
                   </td>
                 </tr>
               ))}
@@ -386,7 +408,7 @@ function Payments({ period, pays, price, paid, left, pending, me }: { period: Pe
                     : <span className="text-[12px] text-muted">⏳ {L('Sardor tasdiqlashi kutilmoqda', 'ждёт подтверждения Сардора')}</span>}
                 {(admin || !p.confirmedAt) && (
                   <button className="text-muted hover:text-critical-text" aria-label={L('To‘lovni o‘chirish', 'Удалить оплату')}
-                    onClick={() => confirm(L(`${som(p.amount)} so‘mlik to‘lov o‘chirilsinmi?`, `Удалить оплату ${som(p.amount)} сум?`)) && mut.mutate({ path: `/payments/${p.id}`, method: 'DELETE' })}><Trash2 size={14} /></button>
+                    onClick={async () => (await ask(L(`${som(p.amount)} so‘mlik to‘lov o‘chirilsinmi?`, `Удалить оплату ${som(p.amount)} сум?`), { danger: true, ok: L('O‘chirish', 'Удалить') })) && mut.mutate({ path: `/payments/${p.id}`, method: 'DELETE' })}><Trash2 size={14} /></button>
                 )}
               </li>
             ))}
@@ -531,7 +553,7 @@ function OrderSheet({ o, d, me, onClose }: { o: Order; d: NarxtopData; me: MeInf
         {o.files.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {o.files.map((x, i) => (
-              <Button key={i} size="sm" onClick={() => downloadAuthed(`/narxtop/orders/${o.id}/file/${i}`, x.name).catch((e: Error) => alert(e.message))}><FileText size={14} />{x.name}</Button>
+              <Button key={i} size="sm" onClick={() => downloadAuthed(`/narxtop/orders/${o.id}/file/${i}`, x.name).catch((e: Error) => tell(e.message))}><FileText size={14} />{x.name}</Button>
             ))}
           </div>
         )}
@@ -560,8 +582,8 @@ function OrderSheet({ o, d, me, onClose }: { o: Order; d: NarxtopData; me: MeInf
         </section>
 
         <div className="flex justify-end border-t border-line pt-3">
-          <Button variant="danger" onClick={() => confirm(L(`“${o.title}” vazifasi o‘chirilsinmi? Bu qaytarilmaydi.`, `Удалить задачу «${o.title}»? Это нельзя отменить.`)) && mut.mutate({ path: `/orders/${o.id}`, method: 'DELETE' }, { onSuccess: onClose })}>
-            <Trash2 size={15} />{L('Vazifani o‘chirish', 'Удалить задачу')}
+          <Button variant="danger" onClick={async () => (await ask(L(`“${o.title}” arxivga olinsinmi?\nVazifa ro‘yxat va hisobotdan chiqadi, lekin “Arxiv”dan istalgan payt tiklanadi.`, `Перенести «${o.title}» в архив?\nЗадача исчезнет из списка и отчёта, но её можно восстановить из «Архива».`), { ok: L('Arxivga olish', 'В архив') })) && mut.mutate({ path: `/orders/${o.id}`, method: 'DELETE' }, { onSuccess: onClose })}>
+            <Archive size={15} />{L('Arxivga olish', 'В архив')}
           </Button>
         </div>
       </div>

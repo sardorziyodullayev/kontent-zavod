@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import type { Lang, Me, Role } from '../src/core/narxtop';
+import { errLabel, type Lang, type Me, type Role } from '../src/core/narxtop';
 import { db } from './db';
 import { users } from './schema';
 
@@ -11,7 +11,10 @@ const TOKEN = process.env.ADMIN_TOKEN ?? '';
 const SECRET = process.env.SESSION_SECRET || (TOKEN ? `kz-session:${TOKEN}` : 'kz-local-dev');
 const SESSION_DAYS = 60;
 
-export type AuthUser = { id: number; login: string; name: string; role: Role; tgId: string | null; lang: Lang; via: 'session' | 'token' | 'local' };
+export type AuthUser = { id: number; login: string; name: string; role: Role; tgId: string | null; lang: Lang; mustChange?: boolean; via: 'session' | 'token' | 'local' };
+/** Xato matni so'rov tilida (panel X-Lang sarlavhasini yuboradi). */
+export const reqLang = (c: Context): Lang => (c.req.header('x-lang') === 'ru' ? 'ru' : 'uz');
+const fail = (c: Context, msg: string, status: 401 | 403 | 429) => c.json({ error: errLabel(msg, reqLang(c)) }, status);
 export type Env = { Variables: { user: AuthUser } };
 
 export function hashPassword(pw: string): string {
@@ -55,7 +58,7 @@ export async function resolveUser(c: Context): Promise<AuthUser | null> {
     if (!s) return null;
     const [u] = await db.select().from(users).where(eq(users.id, s.id));
     if (!u || u.ver !== s.ver) return null;
-    return { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, via: 'session' };
+    return { id: u.id, login: u.login, name: u.name, role: u.role, tgId: u.tgId, lang: u.lang, mustChange: u.mustChange, via: 'session' };
   }
   if (!TOKEN && !tok && (await userCount()) === 0) return { id: 0, login: 'local', name: 'Admin', role: 'admin', tgId: null, lang: 'uz', via: 'local' };
   return null;
@@ -68,8 +71,8 @@ export const requireUser: MiddlewareHandler<Env> = async (c, next) => {
   const p = c.req.path;
   if (p.endsWith('/health') || p.endsWith('/auth/login')) return next();
   const u = await resolveUser(c);
-  if (!u) return c.json({ error: 'Kirish kerak' }, 401);
-  if (u.role === 'client' && !CLIENT_PATHS.some((re) => re.test(p))) return c.json({ error: 'Bu bo‘lim siz uchun yopiq' }, 403);
+  if (!u) return fail(c, 'Kirish kerak', 401);
+  if (u.role === 'client' && !CLIENT_PATHS.some((re) => re.test(p))) return fail(c, 'Bu bo‘lim siz uchun yopiq', 403);
   c.set('user', u);
   return next();
 };
@@ -79,31 +82,38 @@ export const adminOnly: MiddlewareHandler<Env> = async (c, next) => {
   return next();
 };
 
-// Parolni taxmin qilishga qarshi: bitta IP dan 15 daqiqada 10 ta xato urinish.
+// Parolni taxmin qilishga qarshi: 15 daqiqada 10 ta xato urinish — IP bo'yicha ham, login bo'yicha ham.
+// X-Forwarded-For ning birinchi qiymatini so'rov yuboruvchi o'zi yozishi mumkin, shuning uchun proksi qo'shgan OXIRGI manzil olinadi;
+// login bo'yicha hisob esa IP almashtirib taxmin qilishni ham to'xtatadi.
 const fails = new Map<string, { n: number; until: number }>();
-const ipOf = (c: Context) => c.req.header('x-forwarded-for')?.split(',')[0].trim() || c.req.header('x-real-ip') || 'local';
+const ipOf = (c: Context) => c.req.header('x-forwarded-for')?.split(',').pop()?.trim() || c.req.header('x-real-ip') || 'local';
+const blocked = (k: string) => { const f = fails.get(k); return !!f && f.n >= 10 && f.until > Date.now(); };
+const addFail = (k: string) => {
+  const f = fails.get(k), now = Date.now();
+  fails.set(k, f && f.until > now ? { n: f.n + 1, until: f.until } : { n: 1, until: now + 15 * 60_000 });
+  if (fails.size > 5000) for (const [key, v] of fails) if (v.until < now) fails.delete(key);
+};
 
 const cleanLogin = (s: unknown) => String(s ?? '').trim().toLowerCase();
 function checkNewPassword(pw: unknown): string {
   const s = String(pw ?? '');
-  if (s.length < 6) throw new HTTPException(400, { message: 'Parol kamida 6 belgi bo‘lsin' });
+  if (s.length < 8) throw new HTTPException(400, { message: 'Parol kamida 8 belgi bo‘lsin' });
   return s;
 }
-const meOf = (u: { id: number; login: string; name: string; role: Role; tgId: string | null; lang: Lang }): Me => ({ id: u.id, login: u.login, name: u.name, role: u.role, tgLinked: !!u.tgId, lang: u.lang });
+const meOf = (u: { id: number; login: string; name: string; role: Role; tgId: string | null; lang: Lang; mustChange?: boolean }): Me => ({ id: u.id, login: u.login, name: u.name, role: u.role, tgLinked: !!u.tgId, lang: u.lang, mustChange: !!u.mustChange });
 const cleanLang = (l: unknown): Lang | null => (l === 'ru' || l === 'uz' ? l : null);
 
 export const auth = new Hono<Env>()
   .post('/auth/login', async (c) => {
-    const ip = ipOf(c), f = fails.get(ip);
-    if (f && f.n >= 10 && f.until > Date.now()) return c.json({ error: 'Juda ko‘p urinish. 15 daqiqadan keyin qayta urinib ko‘ring.' }, 429);
     const b = await c.req.json<{ login?: string; password?: string }>().catch(() => ({}) as { login?: string; password?: string });
-    const [u] = await db.select().from(users).where(eq(users.login, cleanLogin(b.login)));
+    const login = cleanLogin(b.login), kIp = 'ip:' + ipOf(c), kLogin = 'login:' + login;
+    if (blocked(kIp) || blocked(kLogin)) return fail(c, 'Juda ko‘p urinish. 15 daqiqadan keyin qayta urinib ko‘ring.', 429);
+    const [u] = await db.select().from(users).where(eq(users.login, login));
     if (!u || !checkPassword(String(b.password ?? ''), u.passHash)) {
-      const cur = f && f.until > Date.now() ? f : { n: 0, until: Date.now() + 15 * 60_000 };
-      fails.set(ip, { n: cur.n + 1, until: cur.until });
-      return c.json({ error: 'Login yoki parol noto‘g‘ri' }, 401);
+      addFail(kIp); addFail(kLogin);
+      return fail(c, 'Login yoki parol noto‘g‘ri', 401);
     }
-    fails.delete(ip);
+    fails.delete(kIp); fails.delete(kLogin);
     return c.json({ token: makeSession(u.id, u.ver), me: meOf(u) });
   })
   .get('/me', (c) => {
@@ -123,8 +133,9 @@ export const auth = new Hono<Env>()
     const b = await c.req.json<{ old?: string; password?: string }>();
     const [row] = await db.select().from(users).where(eq(users.id, u.id));
     if (!row || !checkPassword(String(b.old ?? ''), row.passHash)) throw new HTTPException(400, { message: 'Eski parol noto‘g‘ri' });
+    if (String(b.password ?? '') === String(b.old ?? '')) throw new HTTPException(400, { message: 'Yangi parol eskisidan farq qilsin' });
     const ver = row.ver + 1;
-    await db.update(users).set({ passHash: hashPassword(checkNewPassword(b.password)), ver }).where(eq(users.id, u.id));
+    await db.update(users).set({ passHash: hashPassword(checkNewPassword(b.password)), ver, mustChange: false }).where(eq(users.id, u.id));
     return c.json({ token: makeSession(u.id, ver) });
   })
   /** Telegram'ni ulash: bot havolasi t.me/<bot>?start=link_<kod> (30 daqiqa amal qiladi). */
@@ -151,7 +162,7 @@ export const auth = new Hono<Env>()
     const role: Role = b.role === 'admin' ? 'admin' : 'client';
     const [dup] = await db.select({ id: users.id }).from(users).where(eq(users.login, login));
     if (dup) throw new HTTPException(400, { message: 'Bu login band' });
-    const [u] = await db.insert(users).values({ login, name, role, lang: cleanLang(b.lang) ?? (role === 'client' ? 'ru' : 'uz'), passHash: hashPassword(checkNewPassword(b.password)), createdAt: Date.now() }).returning();
+    const [u] = await db.insert(users).values({ login, name, role, lang: cleanLang(b.lang) ?? (role === 'client' ? 'ru' : 'uz'), passHash: hashPassword(checkNewPassword(b.password)), mustChange: true, createdAt: Date.now() }).returning();
     return c.json(meOf(u), 201);
   })
   .patch('/users/:id', adminOnly, async (c) => {
@@ -163,7 +174,7 @@ export const auth = new Hono<Env>()
     if (b.name?.trim()) patch.name = b.name.trim();
     if (b.role === 'admin' || b.role === 'client') patch.role = b.role;
     if (cleanLang(b.lang)) patch.lang = cleanLang(b.lang)!;
-    if (b.password) { patch.passHash = hashPassword(checkNewPassword(b.password)); patch.ver = row.ver + 1; }
+    if (b.password) { patch.passHash = hashPassword(checkNewPassword(b.password)); patch.ver = row.ver + 1; patch.mustChange = c.get('user').id !== id; }
     await db.update(users).set(patch).where(eq(users.id, id));
     return c.json({ ok: true });
   })

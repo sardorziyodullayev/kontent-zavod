@@ -498,15 +498,18 @@ async function nxMessage(m: NonNullable<Update['message']>, isOwner: boolean): P
   const files = m.document ? [{ name: m.document.file_name ?? 'ssenariy', fileId: m.document.file_id }] : [];
   if (!text && !files.length) return false;
   const waiting = bs.taskWait?.includes(m.chat.id);
-  if (waiting || me?.role === 'client') {
+  // Ssenariyga o'xshagan xabar (fayl, bir necha qator yoki uzun matn) darhol vazifa bo'ladi;
+  // qisqa xabar ("ok", "rahmat") tasodifan vazifaga aylanmasin — tugma bilan so'raymiz.
+  const looksLikeTask = files.length > 0 || text.includes('\n') || text.length >= 40;
+  if (waiting || (me?.role === 'client' && looksLikeTask)) {
     if (waiting) { bs.taskWait = bs.taskWait!.filter((c) => c !== m.chat.id); saveBot(bs); }
     await nxCreate(m.chat.id, m.chat.id, text, files, m.message_id, lang);
     return true;
   }
-  // egasi tugmasiz yozgan xabar: tasodifan vazifa bo'lib ketmasin — so'raymiz
+  // tugmasiz yozilgan qisqa xabar yoki egasining xabari: tasodifan vazifa bo'lib ketmasin — so'raymiz
   bs.nx = Object.fromEntries([...Object.entries(bs.nx ?? {}).slice(-19), [String(m.message_id), { text, files }]]);
   saveBot(bs);
-  await html(m.chat.id, '📥 Shu xabarni Narxtop vazifasi qilib qo‘shaymi?', { reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, reply_markup: { inline_keyboard: [[{ text: '✅ Ha, qo‘sh', callback_data: `nx:add:${m.message_id}` }, { text: 'Yo‘q', callback_data: `nx:no:${m.message_id}` }]] } });
+  await html(m.chat.id, tr(lang, '📥 Shu xabarni vazifa qilib qo‘shaymi?', '📥 Добавить это сообщение как задачу?'), { reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, reply_markup: { inline_keyboard: [[{ text: tr(lang, '✅ Ha, qo‘sh', '✅ Да, добавить'), callback_data: `nx:add:${m.message_id}` }, { text: tr(lang, 'Yo‘q', 'Нет'), callback_data: `nx:no:${m.message_id}` }]] } });
   return true;
 }
 
@@ -558,7 +561,7 @@ async function nxCallback(q: NonNullable<Update['callback_query']>, data: string
     const item = bs.nx?.[a];
     if (bs.nx) delete bs.nx[a];
     saveBot(bs);
-    if (kind === 'no' || !item) { await clear(); if (msg) await tg('editMessageText', { chat_id: chat, message_id: msg, text: kind === 'no' ? 'Qo‘shilmadi.' : 'Xabar topilmadi, qayta yuboring.' }); return; }
+    if (kind === 'no' || !item) { await clear(); if (msg) await tg('editMessageText', { chat_id: chat, message_id: msg, text: kind === 'no' ? tr(lang, 'Qo‘shilmadi.', 'Не добавлено.') : tr(lang, 'Xabar topilmadi, qayta yuboring.', 'Сообщение не найдено, отправьте ещё раз.') }); return; }
     if (msg) await tg('deleteMessage', { chat_id: chat, message_id: msg }).catch(() => undefined);
     await nxCreate(chat, q.from.id, item.text, item.files, Number(a), lang);
     return;

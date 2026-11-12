@@ -3,7 +3,7 @@ import * as N from '../src/core/narxtop';
 
 const order = (o: Partial<N.Order>): N.Order => ({
   id: 1, periodId: 1, title: 'A', direction: '', style: '', status: 'new', script: '', videoUrl: '', note: '', deadline: null,
-  createdAt: 0, doneAt: null, createdBy: '', source: 'panel', files: [], log: [], ...o,
+  createdAt: 0, doneAt: null, createdBy: '', source: 'panel', files: [], log: [], deletedAt: null, ...o,
 });
 
 describe('narxtop', () => {
@@ -59,6 +59,12 @@ describe('narxtop', () => {
     expect(N.parseAmount('5')).toBeNull();
   });
 
+  test('server xatolari rus tilida', () => {
+    expect(N.errLabel('Summani yozing', 'ru')).toBe('Укажите сумму');
+    expect(N.errLabel('Summani yozing', 'uz')).toBe('Summani yozing');
+    expect(N.errLabel('nomalum xato', 'ru')).toBe('nomalum xato');
+  });
+
   test('rus tili: nomlar, holatlar, tarix va bot matni', () => {
     expect(N.label('Avtosalonlar', 'ru')).toBe('Автосалоны');
     expect(N.label('2D animatsiya', 'ru')).toBe('2D-анимация');
@@ -76,7 +82,7 @@ describe('narxtop', () => {
     const d: N.NarxtopData = {
       periods: [{ id: 1, name: '1-oy', price: 0, createdAt: 0, closedAt: 1 }, { id: 2, name: '2-oy', price: 0, createdAt: 1, closedAt: null }],
       orders: [order({ id: 1, periodId: 1, title: 'Eski' }), order({ id: 2, periodId: 2, title: 'Serial <7>', status: 'work' }), order({ id: 3, periodId: 2, status: 'done' })],
-      payments: [], directions: N.DEFAULT_DIRECTIONS, styles: N.DEFAULT_STYLES, bot: null,
+      archived: [], payments: [], directions: N.DEFAULT_DIRECTIONS, styles: N.DEFAULT_STYLES, bot: null,
     };
     const t = N.openTasksText(d);
     expect(t).toContain('2-oy');
