@@ -212,6 +212,15 @@ Ulash: saytda *Telegram'ni ulash* → botda *Start* (bir martalik havola, 30 daq
 
 Mijoz botga ssenariyga o'xshagan xabar (fayl, bir necha qator yoki 40+ belgi) yozsa, darhol vazifa bo'ladi; qisqa xabardan ("ok", "rahmat") va Sardorning xabaridan keyin bot "Vazifa qilib qo'shaymi?" deb so'raydi. Bot long polling bilan ishlaydi (javob darhol keladi). Xabarlar: yangi vazifa, "Tekshiring", "Tayyor", "Tuzatish kerak", to'lov yozildi / tasdiqlandi — har kimga o'z tilida.
 
+### Telegram ichida (Mini App)
+
+Ish beruvchi panelni **Telegram ichida, login/parolsiz** ochadi: botdagi "🔗 Panelni ochish", vazifa kartasidagi "🔗 Panelda" yoki chat pastidagi doimiy **"Panel"** menyu tugmasi (bot uni ulanganda va `/start` da o'rnatadi, `setChatMenuButton`). Bu tugmalar faqat shaxsiy chatda `web_app`; guruhda oddiy havola.
+
+- Kirish: Telegram sahifaga imzolangan `initData` beradi → `POST /api/auth/telegram` ([server/telegram.ts](server/telegram.ts) `checkWebAppInit`: `HMAC_SHA256("WebAppData", BOT_TOKEN)` kaliti bilan imzo, `auth_date` 24 soatdan eski bo'lmasin) → `user.id` bo'yicha `users.tgId` → oddiy sessiya tokeni. Telegram ulanmagan bo'lsa 403 va kirish oynasida "Profil → Telegram'ni ulash" yo'riqnomasi.
+- Brauzer ([src/lib/telegram.ts](src/lib/telegram.ts)): `telegram-web-app.js` faqat Telegram ichida yuklanadi (manzilda `tgWebAppData` yoki Telegram user-agent); `ready()`, `expand()`, mavzu `colorScheme` dan, til — profil tili. Mini App ichida vaqtinchalik parolni almashtirish ekrani chiqmaydi. Vazifa paneli ochiq bo'lsa Telegram "Orqaga" tugmasi uni yopadi.
+- **Excel** Mini App ichida yuklab olinmaydi: `POST /api/narxtop/report/send {period, lang}` — server faylni bot orqali shu foydalanuvchining chatiga yuboradi ("Fayl chatga yuborildi"). Oddiy brauzerda eskicha yuklab olinadi.
+- Sinov: `TELEGRAM_API_URL` (faqat mahalliy) — Bot API o'rniga soxta server manzili; server ham, worker ham shu orqali ishlaydi.
+
 ### Ma'lumotlar va API
 
 Jadvallar ([server/schema.ts](server/schema.ts)): `users` (login, rol, til, Telegram), `periods` (oylar, summa, yakunlangan vaqt), `orders` (vazifalar, tarix, fayllar), `payments` (to'lovlar, kim yozdi, tasdiq).
@@ -219,6 +228,7 @@ Jadvallar ([server/schema.ts](server/schema.ts)): `users` (login, rol, til, Tele
 | Metod | Yo'l | Vazifasi |
 |---|---|---|
 | POST | `/api/auth/login` | `{login, password}` → sessiya tokeni |
+| POST | `/api/auth/telegram` | `{initData}` (Telegram Mini App) → sessiya tokeni |
 | GET | `/api/me` | kim kirgan (rol, til, Telegram) |
 | POST | `/api/me/lang`, `/api/me/password`, `/api/me/telegram` | til, parol, Telegram havolasi |
 | GET/POST/PATCH/DELETE | `/api/users…` | foydalanuvchilar (admin) |
@@ -228,6 +238,7 @@ Jadvallar ([server/schema.ts](server/schema.ts)): `users` (login, rol, til, Tele
 | DELETE / POST | `/api/narxtop/orders/:id`, `/orders/:id/restore` | arxivga olish (`?hard=1` — butunlay, admin) va tiklash |
 | GET / POST | `/api/narxtop/backup.json`, `/api/narxtop/restore` | zaxira nusxa va undan tiklash (admin) |
 | GET | `/api/narxtop/report.xlsx?period=<id\|all>&lang=<uz\|ru>` | Excel hisobot |
+| POST | `/api/narxtop/report/send` | `{period, lang}` — Excel'ni bot orqali o'z Telegram chatiga (Mini App) |
 | POST | `/api/narxtop/tg/…`, `/api/users/tg-…` | bot uchun (ADMIN_TOKEN bilan, Telegram foydalanuvchisi nomidan) |
 
 Mantiq va matnlar [src/core/narxtop.ts](src/core/narxtop.ts) da (holatlar, rus tilidagi nomlar, hisob, summa o'qish, bot matnlari), testlari [tests/narxtop.test.ts](tests/narxtop.test.ts).

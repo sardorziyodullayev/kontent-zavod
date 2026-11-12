@@ -6,6 +6,7 @@ import { HTTPException } from 'hono/http-exception';
 import { errLabel, type Lang, type Me, type Role } from '../src/core/narxtop';
 import { db } from './db';
 import { users } from './schema';
+import { checkWebAppInit, tgUrl } from './telegram';
 
 const TOKEN = process.env.ADMIN_TOKEN ?? '';
 const SECRET = process.env.SESSION_SECRET || (TOKEN ? `kz-session:${TOKEN}` : 'kz-local-dev');
@@ -69,7 +70,7 @@ const CLIENT_PATHS = [/^\/api\/narxtop(\/|$)/, /^\/api\/me(\/|$)/];
 
 export const requireUser: MiddlewareHandler<Env> = async (c, next) => {
   const p = c.req.path;
-  if (p.endsWith('/health') || p.endsWith('/auth/login')) return next();
+  if (p.endsWith('/health') || p.endsWith('/auth/login') || p.endsWith('/auth/telegram')) return next();
   const u = await resolveUser(c);
   if (!u) return fail(c, 'Kirish kerak', 401);
   if (u.role === 'client' && !CLIENT_PATHS.some((re) => re.test(p))) return fail(c, 'Bu bo‘lim siz uchun yopiq', 403);
@@ -114,6 +115,17 @@ export const auth = new Hono<Env>()
       return fail(c, 'Login yoki parol noto‘g‘ri', 401);
     }
     fails.delete(kIp); fails.delete(kLogin);
+    return c.json({ token: makeSession(u.id, u.ver), me: meOf(u) });
+  })
+  /** Telegram Mini App ichidan parolsiz kirish: initData bot tokeni bilan imzolangan, user.id → users.tgId. */
+  .post('/auth/telegram', async (c) => {
+    const b = await c.req.json<{ initData?: string }>().catch(() => ({}) as { initData?: string });
+    const kIp = 'ip:' + ipOf(c);
+    if (blocked(kIp)) return fail(c, 'Juda ko‘p urinish. 15 daqiqadan keyin qayta urinib ko‘ring.', 429);
+    const v = checkWebAppInit(String(b.initData ?? ''), process.env.TELEGRAM_BOT_TOKEN ?? '');
+    if (!v) { addFail(kIp); return fail(c, 'Telegram ma’lumoti noto‘g‘ri yoki eskirgan. Botdan panelni qayta oching.', 401); }
+    const [u] = await db.select().from(users).where(eq(users.tgId, String(v.user.id)));
+    if (!u) return c.json({ error: errLabel('Telegram akkauntingiz panelga ulanmagan. Login va parol bilan kiring, keyin Profil → «Telegram’ni ulash».', reqLang(c)), code: 'not-linked' }, 403);
     return c.json({ token: makeSession(u.id, u.ver), me: meOf(u) });
   })
   .get('/me', (c) => {
@@ -211,7 +223,7 @@ export async function botUsername(): Promise<string | null> {
   const t = process.env.TELEGRAM_BOT_TOKEN;
   if (!t) return (botName = null);
   try {
-    const r = await (await fetch(`https://api.telegram.org/bot${t}/getMe`)).json() as { ok: boolean; result?: { username: string } };
+    const r = await (await fetch(tgUrl('getMe', t))).json() as { ok: boolean; result?: { username: string } };
     botName = r.ok ? r.result!.username : null;
   } catch { return null; }
   return botName;
@@ -225,7 +237,7 @@ export async function tgNotify(targets: { chatId: string | null | undefined; lan
   for (const { chatId: chat_id, lang } of targets) {
     if (!chat_id || seen.has(chat_id)) continue;
     seen.add(chat_id);
-    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id, text: text(lang), parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...(extra?.(lang) ?? {}) }) })
+    await fetch(tgUrl('sendMessage', t), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id, text: text(lang), parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...(extra?.(lang) ?? {}) }) })
       .catch((e: Error) => console.error('tgNotify:', e.message));
   }
 }

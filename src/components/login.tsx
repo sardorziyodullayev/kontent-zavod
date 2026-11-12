@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { loginWithPassword, saveToken } from '@/lib/data';
 import { L } from '@/lib/lang';
+import { tgNotice } from '@/lib/telegram';
 import { LangSwitch } from './profile';
 import { BRAND, PixelLogo } from './brand';
 import { Button } from './ui/button';
@@ -32,7 +33,7 @@ export function Login({ message }: { message?: string }) {
     }
   }
 
-  const shown = err || (message && message !== 'Kirish kerak' ? message : '');
+  const shown = err || (message && message !== 'Kirish kerak' ? message : '') || tgNotice;
   return (
     <main className="grid min-h-screen place-items-center px-4">
       <form onSubmit={submit} className="card grid w-full max-w-[400px] gap-4 p-6 sm:p-7">

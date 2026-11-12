@@ -14,6 +14,8 @@ import { PAY_ASK, PAY_BAD, STATUSES, choiceKeyboard, createdText, label, linkFai
 import { GIFT_MISSING, LEAD_PROMPT, LEAD_THANKS, OWNER_HELP, PUBLIC_MENU, PUBLIC_WELCOME, SERVICES_TEXT, approvalText, approvedText, awaitingApproval, leadText, nextFreeSlot, planText, postponedText, statsText } from '../src/core/bot';
 
 const API = process.env.PANEL_URL ?? 'http://localhost:4310';
+/** Telegram Bot API manzili; TELEGRAM_API_URL — faqat mahalliy sinov uchun (soxta Telegram serveri). */
+const TG_API = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 const TOKEN = process.env.ADMIN_TOKEN ?? '';
 const MEDIA_DIR = process.env.MEDIA_DIR ?? './media'; // <videoId>.mp4 fayllari
 const INTERVAL = Number(process.env.WORKER_INTERVAL ?? 60) * 1000;
@@ -39,7 +41,7 @@ type Adapter = (job: QueueItem, file?: string) => Promise<{ url: string }>;
 const adapters: Record<PlatformId, Adapter> = {
   async telegram(job, file) {
     need('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHANNEL');
-    const base = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+    const base = `${TG_API}/bot${process.env.TELEGRAM_BOT_TOKEN}`;
     const text = `${job.title}\n\n${job.caption}`;
     let res: { ok: boolean; description?: string; result: { message_id: number } };
     if (file) {
@@ -83,7 +85,7 @@ let tgFollowers: number | null = null;
 let tgSentAt = 0;
 async function syncTelegram() {
   if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL) return;
-  const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getChatMemberCount?chat_id=${encodeURIComponent(process.env.TELEGRAM_CHANNEL)}`;
+  const url = `${TG_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getChatMemberCount?chat_id=${encodeURIComponent(process.env.TELEGRAM_CHANNEL)}`;
   const res: { ok: boolean; result?: number; description?: string } = await (await fetch(url)).json();
   if (!res.ok || res.result == null) throw new Error(`Telegram obunachilar: ${res.description}`);
   if (res.result === tgFollowers && Date.now() - tgSentAt < 30 * 60_000) return;
@@ -150,7 +152,7 @@ async function syncChannels() {
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR ?? 8);
 const DIGEST_FILE = path.join(process.env.DATA_DIR ?? './data', 'digest-sent.txt');
 async function tg<T>(method: string, body: unknown): Promise<T> {
-  const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const r = await fetch(`${TG_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = (await r.json()) as { ok: boolean; result: T; description?: string };
   if (!j.ok) throw new Error(`Telegram ${method}: ${j.description}`);
   return j.result;
@@ -187,7 +189,7 @@ async function sendFile(method: 'sendVideo' | 'sendDocument', chat_id: number | 
   form.append('chat_id', String(chat_id));
   form.append('caption', caption.slice(0, 1024));
   form.append(method === 'sendVideo' ? 'video' : 'document', new Blob([fs.readFileSync(file)]), path.basename(file));
-  const res = await (await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', body: form })).json();
+  const res = await (await fetch(`${TG_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', body: form })).json();
   if (!res.ok) throw new Error(`Telegram ${method}: ${res.description}`);
 }
 
@@ -374,12 +376,20 @@ function nxActionOf(text: string): NxAction | null {
   const CMD: Record<string, NxAction> = { '/vazifa': 'add', '/zadacha': 'add', '/vazifalar': 'tasks', '/zadachi': 'tasks', '/tolov': 'pay', '/oplata': 'pay', '/excel': 'report', '/otchet': 'report', '/til': 'lang', '/yazyk': 'lang', '/yordam': 'help', '/help': 'help' };
   return CMD[cmd] ?? null;
 }
-const panelBtn = (lang: Lang) => (PANEL_PUBLIC ? [{ text: tr(lang, '🔗 Panelni ochish', '🔗 Открыть панель'), url: `${PANEL_PUBLIC}/#/narxtop` }] : []);
+/** Panel havolasi: shaxsiy chatda Telegram ichida ochiladi (Mini App, parolsiz), guruhda — oddiy havola. */
+const panelLink = (chat: number, path: string) => (chat > 0 ? { web_app: { url: `${PANEL_PUBLIC}/#${path}` } } : { url: `${PANEL_PUBLIC}/#${path}` });
+const panelBtn = (lang: Lang, chat: number) => (PANEL_PUBLIC ? [{ text: tr(lang, '🔗 Panelni ochish', '🔗 Открыть панель'), ...panelLink(chat, '/narxtop') }] : []);
+/** Chat menyusidagi doimiy "Panel" tugmasi (yozish maydoni yonida) — Mini App'ni ochadi. */
+async function nxMenuButton(chat: number, lang: Lang) {
+  if (!PANEL_PUBLIC || chat <= 0) return;
+  await tg('setChatMenuButton', { chat_id: chat, menu_button: { type: 'web_app', text: tr(lang, 'Panel', 'Панель'), web_app: { url: `${PANEL_PUBLIC}/#/narxtop` } } }).catch((e: Error) => console.error(e.message));
+}
 
 async function nxMenu(chat: number, lang: Lang, name?: string) {
   const hi = name ? tr(lang, `Salom, ${escB(name)}! 👋`, `Здравствуйте, ${escB(name)}! 👋`) : '';
   await html(chat, [hi, nxHelp(lang)].filter(Boolean).join('\n\n'), { reply_markup: nxKeyboard(lang) });
-  if (PANEL_PUBLIC) await html(chat, tr(lang, 'Panel saytda ham ochiladi:', 'Панель также доступна на сайте:'), { reply_markup: { inline_keyboard: [panelBtn(lang)] } });
+  if (PANEL_PUBLIC) await html(chat, chat > 0 ? tr(lang, 'Panel Telegram ichida ochiladi (parolsiz) — pastdagi tugma yoki chap pastdagi «Panel»:', 'Панель открывается прямо в Telegram (без пароля) — кнопка ниже или «Панель» слева внизу:') : tr(lang, 'Panel saytda ham ochiladi:', 'Панель также доступна на сайте:'), { reply_markup: { inline_keyboard: [panelBtn(lang, chat)] } });
+  await nxMenuButton(chat, lang);
 }
 
 async function nxSendReport(chat: number, lang: Lang, period: string) {
@@ -390,7 +400,7 @@ async function nxSendReport(chat: number, lang: Lang, period: string) {
   form.append('chat_id', String(chat));
   form.append('caption', tr(lang, '📊 Narxtop hisoboti', '📊 Отчёт NARXTOP'));
   form.append('document', new Blob([await r.arrayBuffer()]), name);
-  const res = await (await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: 'POST', body: form })).json();
+  const res = await (await fetch(`${TG_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: 'POST', body: form })).json();
   if (!res.ok) throw new Error('sendDocument: ' + res.description);
 }
 
@@ -402,9 +412,9 @@ async function nxTasks(chat: number, lang: Lang, edit?: number) {
   const num = new Map(os.map((o, i) => [o.id, i + 1]));
   const open = os.filter((o) => o.status !== 'done').reverse();
   const text = openTasksText(d, '', lang) + (open.length ? '\n\n' + tr(lang, '👇 Vazifani tanlang — holatini shu yerdan o‘zgartirasiz:', '👇 Выберите задачу — статус можно изменить прямо здесь:') : '');
-  type Btn = { text: string; callback_data?: string; url?: string };
+  type Btn = { text: string; callback_data?: string; url?: string; web_app?: { url: string } };
   const rows: Btn[][] = open.slice(0, 20).map((o) => [{ text: `${num.get(o.id)}. ${o.title.slice(0, 40)} · ${statusLabel(o.status, lang)}`, callback_data: `nx:o:${o.id}` }]);
-  if (PANEL_PUBLIC) rows.push(panelBtn(lang));
+  if (PANEL_PUBLIC) rows.push(panelBtn(lang, chat));
   const body = { text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: rows } };
   if (edit) await tg('editMessageText', { chat_id: chat, message_id: edit, ...body }).catch(() => undefined);
   else await tg('sendMessage', { chat_id: chat, ...body });
@@ -424,7 +434,7 @@ async function nxCard(chat: number, lang: Lang, id: number, edit?: number) {
   if (o.videoUrl) L.push(`🎬 ${escB(o.videoUrl)}`);
   if (o.script) L.push('', `<i>${escB(o.script.slice(0, 400))}${o.script.length > 400 ? '…' : ''}</i>`);
   const st = STATUSES.filter((x) => x.id !== o.status).map((x) => ({ text: statusLabel(x.id, lang), callback_data: `nx:st:${o.id}:${x.id}` }));
-  const kb = [st.slice(0, 2), st.slice(2), [{ text: tr(lang, '⬅️ Vazifalar', '⬅️ К задачам'), callback_data: 'nx:tl' }, ...(PANEL_PUBLIC ? [{ text: tr(lang, '🔗 Panelda', '🔗 В панели'), url: `${PANEL_PUBLIC}/#/narxtop?v=${o.id}` }] : [])]];
+  const kb = [st.slice(0, 2), st.slice(2), [{ text: tr(lang, '⬅️ Vazifalar', '⬅️ К задачам'), callback_data: 'nx:tl' }, ...(PANEL_PUBLIC ? [{ text: tr(lang, '🔗 Panelda', '🔗 В панели'), ...panelLink(chat, `/narxtop?v=${o.id}`) }] : [])]];
   const body = { text: L.join('\n'), parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: kb } };
   if (edit) await tg('editMessageText', { chat_id: chat, message_id: edit, ...body }).catch(() => undefined);
   else await tg('sendMessage', { chat_id: chat, ...body });

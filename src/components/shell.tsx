@@ -5,6 +5,7 @@ import { alerts, localHour } from '@/core';
 import { AuthError, useAppData, useMe, useNow, type AppData, type MeInfo } from '@/lib/data';
 import { NarxtopPage } from '@/pages/narxtop';
 import { L, syncLang } from '@/lib/lang';
+import { inTelegram } from '@/lib/telegram';
 import { AskHost } from './ask';
 import { ForcePassword, LangSwitch, ProfileCard } from './profile';
 import { Modal } from './ui/dialog';
@@ -58,7 +59,8 @@ export function Shell() {
   if (me.error instanceof AuthError) return <Login message={me.error.message} />;
   if (me.isLoading) return <div className="p-10 text-muted">{L('Yuklanmoqda…', 'Загрузка…')}</div>;
   syncLang(me.data ?? null);
-  if (me.data?.mustChange && me.data.via === 'session') return <ForcePassword name={me.data.name} />;
+  // Telegram Mini App ichida parolsiz kirilgan: vaqtinchalik parolni almashtirish ekrani ko'rsatilmaydi
+  if (me.data?.mustChange && me.data.via === 'session' && !inTelegram()) return <ForcePassword name={me.data.name} />;
   if (me.data?.role === 'client') return <><ClientShell me={me.data} /><AskHost /></>;
   return <><AdminShell me={me.data ?? null} /><AskHost /></>;
 }

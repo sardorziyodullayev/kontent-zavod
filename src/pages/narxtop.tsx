@@ -8,11 +8,23 @@ import { Modal, Sheet } from '@/components/ui/dialog';
 import { Card, CardHead, Empty, Field, Meter } from '@/components/ui/primitives';
 import { ask, tell } from '@/components/ask';
 import { TelegramLink } from '@/components/profile';
-import { downloadAuthed, useNarxtop, useNarxtopMutation, type MeInfo } from '@/lib/data';
+import { apiCall, downloadAuthed, useNarxtop, useNarxtopMutation, type MeInfo } from '@/lib/data';
 import { L, lang } from '@/lib/lang';
+import { inTelegram, telegramBack } from '@/lib/telegram';
 import { cn, ls } from '@/lib/utils';
 
 /** Telegram xabaridagi havola: …/#/narxtop?v=12 — shu vazifa ochiq holda chiqadi. */
+/** Excel hisobot: oddiy brauzerda yuklab olinadi; Telegram Mini App ichida fayl yuklab bo'lmaydi — bot uni shu chatga yuboradi. */
+function getReport(period: number | 'all' | '') {
+  if (inTelegram()) {
+    apiCall('/narxtop/report/send', 'POST', { period, lang: lang() })
+      .then(() => tell(L('Fayl Telegram chatiga yuborildi — botdagi xabarni oching.', 'Файл отправлен в чат — откройте сообщение от бота.')))
+      .catch((e: Error) => tell(e.message));
+    return;
+  }
+  downloadAuthed(`/narxtop/report.xlsx?period=${period}&lang=${lang()}`, 'narxtop-report.xlsx').catch((e: Error) => tell(e.message));
+}
+
 const linkedId = () => Number(new URLSearchParams(location.hash.split('?')[1] ?? '').get('v')) || undefined;
 
 const TZ = 5 * 3600_000;
@@ -119,7 +131,7 @@ export function NarxtopPage({ me }: { me: MeInfo | null }) {
           <button className="flex shrink-0 items-center gap-1 rounded-full px-3 py-2 text-[13px] text-muted hover:text-ink" onClick={() => setPeriodOpen(true)}><CalendarPlus size={15} />{L('Yangi oy', 'Новый месяц')}</button>
         </div>
         <div className="ml-auto grid grid-cols-2 gap-2 max-sm:w-full sm:flex">
-          <Button variant="dark" className="justify-center" onClick={() => downloadAuthed(`/narxtop/report.xlsx?period=${overview ? 'all' : period?.id ?? ''}&lang=${lang()}`, 'narxtop-report.xlsx').catch((e: Error) => tell(e.message))} disabled={!period && !overview}>
+          <Button variant="dark" className="justify-center" onClick={() => getReport(overview ? 'all' : period?.id ?? '')} disabled={!period && !overview}>
             <Download size={16} />{overview ? L('Excel: barcha oylar', 'Excel: все месяцы') : L('Excel hisobot', 'Отчёт Excel')}
           </Button>
           <Button variant="primary" className="justify-center" onClick={() => setNewOpen(true)}><Plus size={17} />{L('Yangi vazifa', 'Новая задача')}</Button>
@@ -323,7 +335,7 @@ function MonthsOverview({ d, pick }: { d: NarxtopData; pick: (id: number) => voi
                   <td className="text-right tnum">{som(s.paid)}</td>
                   <td className={cn('text-right tnum', s.left > 0 && 'font-semibold text-critical-text')}>{s.price ? som(s.left) : '—'}</td>
                   <td className="text-right">
-                    <Button size="icon-sm" variant="ghost" aria-label={`${p.name} Excel`} title={L('Shu oy Excel hisoboti', 'Отчёт Excel за этот месяц')} onClick={(e) => { e.stopPropagation(); downloadAuthed(`/narxtop/report.xlsx?period=${p.id}&lang=${lang()}`, 'narxtop-report.xlsx').catch((x: Error) => tell(x.message)); }}><Download size={15} /></Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`${p.name} Excel`} title={L('Shu oy Excel hisoboti', 'Отчёт Excel за этот месяц')} onClick={(e) => { e.stopPropagation(); getReport(p.id); }}><Download size={15} /></Button>
                   </td>
                 </tr>
               ))}
@@ -503,6 +515,9 @@ function OrderSheet({ o, d, me, onClose }: { o: Order; d: NarxtopData; me: MeInf
   const mut = useNarxtopMutation();
   const [f, setF] = useState({ title: o.title, script: o.script, videoUrl: o.videoUrl, note: o.note, deadline: o.deadline ? ymd(o.deadline) : '' });
   const [comment, setComment] = useState('');
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => telegramBack(true, () => closeRef.current()), []); // Telegram "Orqaga" tugmasi panelni yopadi
   const dirty = f.title !== o.title || f.script !== o.script || f.videoUrl !== o.videoUrl || f.note !== o.note || (f.deadline || null) !== (o.deadline ? ymd(o.deadline) : null);
   const patch = (body: object, after?: () => void) => mut.mutate({ path: `/orders/${o.id}`, method: 'PATCH', body }, { onSuccess: after });
   const period = d.periods.find((p) => p.id === o.periodId);

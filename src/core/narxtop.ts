@@ -244,6 +244,10 @@ const ERR_RU: Record<string, string> = {
   'Fayl topilmadi': 'Файл не найден',
   'Telegram faylni bermadi (20 MB dan katta bo‘lishi mumkin)': 'Telegram не отдал файл (возможно, он больше 20 МБ)',
   'Telegram ulanmagan': 'Telegram не подключён',
+  'Telegram ma’lumoti noto‘g‘ri yoki eskirgan. Botdan panelni qayta oching.': 'Данные Telegram неверны или устарели. Откройте панель из бота заново.',
+  'Telegram akkauntingiz panelga ulanmagan. Login va parol bilan kiring, keyin Profil → «Telegram’ni ulash».': 'Ваш Telegram не подключён к панели. Войдите по логину и паролю, затем Профиль → «Подключить Telegram».',
+  'Bot sozlanmagan': 'Бот не настроен',
+  'Faylni Telegram’ga yuborib bo‘lmadi': 'Не удалось отправить файл в Telegram',
   'Zaxira fayli noto‘g‘ri': 'Неверный файл резервной копии',
   'Server xatosi': 'Ошибка сервера',
 };

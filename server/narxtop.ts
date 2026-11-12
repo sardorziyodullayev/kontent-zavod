@@ -7,6 +7,7 @@ import { DEFAULT_DIRECTIONS, DEFAULT_STYLES, STATUSES, label, som, normalizeDire
 import { adminOnly, botUsername, tgNotify, type AuthUser, type Env } from './auth';
 import { db } from './db';
 import { orders, payments, periods, users, type OrderFile } from './schema';
+import { tgSendDocument, tgUrl } from './telegram';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const STATUS_IDS = new Set(STATUSES.map((s) => s.id));
@@ -303,9 +304,9 @@ export const narxtop = new Hono<Env>()
     const f = o?.files[Number(c.req.param('idx'))];
     const t = process.env.TELEGRAM_BOT_TOKEN;
     if (!f || !t) throw new HTTPException(404, { message: 'Fayl topilmadi' });
-    const info = await (await fetch(`https://api.telegram.org/bot${t}/getFile?file_id=${encodeURIComponent(f.fileId)}`)).json() as { ok: boolean; result?: { file_path: string } };
+    const info = await (await fetch(tgUrl(`getFile?file_id=${encodeURIComponent(f.fileId)}`, t))).json() as { ok: boolean; result?: { file_path: string } };
     if (!info.ok) throw new HTTPException(404, { message: 'Telegram faylni bermadi (20 MB dan katta bo‘lishi mumkin)' });
-    const r = await fetch(`https://api.telegram.org/file/bot${t}/${info.result!.file_path}`);
+    const r = await fetch(tgUrl(info.result!.file_path, t).replace(`/bot${t}/`, `/file/bot${t}/`));
     return c.body(new Uint8Array(await r.arrayBuffer()), 200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(f.name)}` });
   })
   .post('/periods', async (c) => {
@@ -343,6 +344,19 @@ export const narxtop = new Hono<Env>()
     const lang: Lang = c.req.query('lang') === 'uz' ? 'uz' : c.req.query('lang') === 'ru' ? 'ru' : c.get('user').lang;
     const { buf, name } = await buildReport(q === 'all' ? 'all' : Number(q) || (await currentPeriodId()), lang);
     return c.body(new Uint8Array(buf), 200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}` });
+  })
+  // Telegram Mini App ichida fayl yuklab olinmaydi: Excel bot orqali shu foydalanuvchining Telegram chatiga yuboriladi.
+  .post('/report/send', async (c) => {
+    const u = c.get('user');
+    const b = await c.req.json<{ period?: string | number; lang?: string }>().catch(() => ({}) as { period?: string | number; lang?: string });
+    const chat = u.tgId ?? (u.role === 'admin' ? process.env.TELEGRAM_OWNER_ID : null);
+    if (!chat) throw new HTTPException(400, { message: 'Telegram ulanmagan' });
+    if (!process.env.TELEGRAM_BOT_TOKEN) throw new HTTPException(400, { message: 'Bot sozlanmagan' });
+    const lang: Lang = b.lang === 'uz' || b.lang === 'ru' ? b.lang : u.lang;
+    const { buf, name } = await buildReport(b.period === 'all' ? 'all' : Number(b.period) || (await currentPeriodId()), lang);
+    try { await tgSendDocument(String(chat), buf, name, tr(lang, '📊 Narxtop hisoboti', '📊 Отчёт NARXTOP')); }
+    catch (e) { console.error('report/send:', (e as Error).message); throw new HTTPException(502, { message: 'Faylni Telegram’ga yuborib bo‘lmadi' }); }
+    return c.json({ ok: true, name });
   })
   // ---------- bot uchun (worker ADMIN_TOKEN bilan, Telegram foydalanuvchisi nomidan) ----------
   .post('/tg/order', adminOnly, async (c) => {
