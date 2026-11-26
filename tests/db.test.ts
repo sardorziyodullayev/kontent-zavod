@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, test } from 'vitest';
+import type { Action } from '../src/core';
 
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'kz-db-'));
 process.env.DATA_DIR = DIR;
@@ -38,7 +39,7 @@ describe('saveState: faqat farq yoziladi', () => {
     // bitta video nomi o'zgardi — 1 video qatori + jurnal yozuvi (+ updatedAt) yoziladi, butun baza emas
     const total = loaded.videos.length + loaded.videos.flatMap((v) => v.posts).length + loaded.activity.length;
     w0 = await writes();
-    C.applyAction(loaded, { type: 'video.update', payload: { id: loaded.videos[0].id, patch: { title: 'Yangi nom' } } } as C.Action, NOW + 1000);
+    C.applyAction(loaded, { type: 'video.update', payload: { id: loaded.videos[0].id, patch: { title: 'Yangi nom' } } } as Action, NOW + 1000);
     await D.saveState(loaded);
     const used = (await writes()) - w0;
     expect(used).toBeGreaterThan(0);
@@ -53,7 +54,7 @@ describe('saveState: faqat farq yoziladi', () => {
 
     // video o'chirildi — uning postlari ham bazadan ketadi
     const gone = again.videos[1].id;
-    C.applyAction(again, { type: 'video.delete', payload: { id: gone } } as C.Action, NOW + 2000);
+    C.applyAction(again, { type: 'video.delete', payload: { id: gone } } as Action, NOW + 2000);
     await D.saveState(again);
     const after = (await D.loadState())!;
     expect(after.videos.some((v) => v.id === gone)).toBe(false);
