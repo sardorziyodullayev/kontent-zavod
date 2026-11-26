@@ -250,5 +250,6 @@ const ERR_RU: Record<string, string> = {
   'Faylni Telegram’ga yuborib bo‘lmadi': 'Не удалось отправить файл в Telegram',
   'Zaxira fayli noto‘g‘ri': 'Неверный файл резервной копии',
   'Server xatosi': 'Ошибка сервера',
+  'Baza vaqtincha faqat o‘qish rejimida: o‘zgarishlar saqlanmaydi. Sardorga xabar bering.': 'База временно только для чтения: изменения не сохраняются. Сообщите Сардору.',
 };
 export const errLabel = (msg: string, lang: Lang) => (lang === 'ru' ? ERR_RU[msg] ?? msg : msg);

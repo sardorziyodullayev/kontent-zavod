@@ -11,7 +11,7 @@ import { ActionError, applyAction, emptyState, nextQueue, seed, tick, toCSV, typ
 import crypto from 'node:crypto';
 import { errLabel } from '../src/core/narxtop';
 import { auth, reqLang, requireUser, type Env } from './auth';
-import { initDb, loadState, saveState } from './db';
+import { initDb, isWriteBlocked, loadState, markReadOnly, READ_ONLY, saveState } from './db';
 import { narxtop } from './narxtop';
 import { restoreStatus } from './files';
 import { media, publicMedia } from './media';
@@ -29,7 +29,8 @@ if (process.env.NODE_ENV === 'production' && TOKEN.length < 16) {
 await initDb();
 // SEED=empty: bo'sh bazada namunaviy ma'lumot yaratilmaydi (production).
 let state: State = (await loadState()) ?? (process.env.SEED === 'empty' ? emptyState(Date.now()) : seed(Date.now()));
-await saveState(state);
+// loadState bazadagi holatni eslab qoladi: bu yerda faqat yangi (bo'sh) baza bo'lsa yoziladi
+await saveState(state).catch((e) => { if (!isWriteBlocked(e)) throw e; markReadOnly('ishga tushish', e); });
 
 // Amallar ketma-ket bajariladi: bir vaqtda kelgan ikki so'rov holatni buzmasin.
 let chain: Promise<unknown> = Promise.resolve();
@@ -41,13 +42,20 @@ function serial<T>(fn: () => T | Promise<T>): Promise<T> {
 const act = (action: Action) =>
   serial(async () => {
     const now = Date.now();
+    const before = structuredClone(state);
     tick(state, now);
-    const result = applyAction(state, action, now);
-    await saveState(state);
-    return result;
+    try {
+      const result = applyAction(state, action, now);
+      await saveState(state);
+      return result;
+    } catch (e) {
+      state = before; // saqlanmagan o'zgarish xotirada qolmasin
+      if (isWriteBlocked(e)) markReadOnly('amal', e);
+      throw e;
+    }
   });
 
-setInterval(() => void serial(async () => { tick(state, Date.now()); await saveState(state); }), 60_000).unref();
+setInterval(() => void serial(async () => { tick(state, Date.now()); await saveState(state); }).catch((e: Error) => { if (isWriteBlocked(e)) markReadOnly('tick', e); else console.error('tick:', e.message); }), 60_000).unref();
 
 const ACTIONS = new Set<Action['type']>(['video.create', 'video.update', 'video.move', 'video.check', 'video.delete', 'post.schedule', 'post.reschedule', 'post.remove', 'post.retry', 'post.publishNow', 'post.published', 'post.failed', 'post.stats', 'platform.update', 'channel.sync', 'goals.update', 'workspace.update']);
 
@@ -91,7 +99,7 @@ const api = new Hono<Env>()
   .post('/posts/:id/stats', async (c) => c.json({ ok: true, result: await act({ type: 'post.stats', payload: { ...(await c.req.json()), postId: c.req.param('id') } }) }))
   .post('/videos', async (c) => c.json(await act({ type: 'video.create', payload: await c.req.json() }), 201))
   .route('/media', media)
-  .get('/health', (c) => c.json({ ok: true, auth: !!TOKEN, files: restoreStatus }));
+  .get('/health', (c) => c.json({ ok: true, auth: !!TOKEN, files: restoreStatus, readOnly: READ_ONLY }));
 
 export const app = new Hono();
 // Xavfsizlik sarlavhalari. CSP: skriptlar faqat o'zimizdan (index.html dagi mavzu skripti xesh bilan ruxsat etiladi),
@@ -120,6 +128,7 @@ app.route('/api', api);
 app.route('/pub', publicMedia);
 app.onError((err, c) => {
   if (err instanceof HTTPException) return c.json({ error: errLabel(err.message, reqLang(c)) }, err.status);
+  if (isWriteBlocked(err)) { markReadOnly('so‘rov', err); return c.json({ error: errLabel('Baza vaqtincha faqat o‘qish rejimida: o‘zgarishlar saqlanmaydi. Sardorga xabar bering.', reqLang(c)), readOnly: true }, 503); }
   if (err instanceof ActionError || err instanceof SyntaxError) return c.json({ error: err.message }, 400);
   console.error(err);
   return c.json({ error: errLabel('Server xatosi', reqLang(c)) }, 500);
